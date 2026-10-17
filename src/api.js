@@ -1,0 +1,50 @@
+import { track } from './net.js'
+// Data layer: n8n webhooks kung may VITE_N8N_BASE_URL, kung wala localStorage.
+const BASE = import.meta.env.VITE_N8N_BASE_URL
+const KEY = 'tasks-v1'
+const AUTH = { 'x-app-key': import.meta.env.VITE_API_KEY || '' }
+
+const local = {
+  load: () => { try { return JSON.parse(localStorage.getItem(KEY)) || [] } catch { return [] } },
+  save: (t) => localStorage.setItem(KEY, JSON.stringify(t)),
+}
+
+async function call(path, method, body) {
+  const res = await track(fetch(`${BASE}${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json', ...AUTH },
+    body: body ? JSON.stringify(body) : undefined,
+  }))
+  if (res.status === 403) throw new Error('Walang pahintulot (mali o kulang ang VITE_API_KEY)')
+  if (!res.ok) throw new Error(`n8n ${res.status}`)
+  const text = await res.text()
+  return text ? JSON.parse(text) : []
+}
+
+export const api = {
+  mode: BASE ? 'n8n' : 'local',
+  async list() {
+    return BASE ? call('/tasks', 'GET') : local.load()
+  },
+  async getSettings() {
+    if (!BASE) return {}
+    const rows = await call('/settings', 'GET')
+    return Object.fromEntries(rows.map((r) => [r.key, r.value]))
+  },
+  async saveSetting(key, value) {
+    if (BASE) return call('/settings', 'POST', { key, value })
+  },
+  async create(task) {
+    if (BASE) return call('/tasks', 'POST', task)
+    const t = { id: crypto.randomUUID(), created_at: new Date().toISOString(), ...task }
+    local.save([...local.load(), t]); return t
+  },
+  async update(id, patch) {
+    if (BASE) return call(`/tasks?id=${id}`, 'PATCH', patch)
+    local.save(local.load().map((t) => (t.id === id ? { ...t, ...patch } : t)))
+  },
+  async remove(id) {
+    if (BASE) return call(`/tasks?id=${id}`, 'DELETE')
+    local.save(local.load().filter((t) => t.id !== id))
+  },
+}

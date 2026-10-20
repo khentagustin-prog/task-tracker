@@ -185,7 +185,7 @@ export default function ImageReview({ casinos = [] }) {
                     <div key={flow} className="rv-group">
                       <div className="rv-gh">
                         <b className={`fl ${flow}`}>{flow}</b>
-                        <span className="muted">{flow === 'Activation' ? 'Warm Up, Full Seq, Special Text' : 'Call Reminder, Text Reminder'} · {list.length} steps</span>
+                        <span className="muted">{flow === 'Activation' ? 'Warm Up, Full Seq, Spec Text (Special Text)' : 'Call Reminder, Text Reminder'} · {list.length} steps</span>
                         <button className="primary" disabled={blocked || !list.length} onClick={() => download(flow)}>⬇ {flow} PDF</button>
                       </div>
                       <div className="rv-table">

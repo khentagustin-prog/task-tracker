@@ -55,9 +55,10 @@ export function itemsToLines(items) {
 
 export function parseTable(items) {
   const lines = itemsToLines(items)
-  const text = lines.map((l) => l.items.map((i) => i.s).join(' '))
+  const text = lines.map((l) => l.items.map((i) => i.s.trim()).join(' '))
   const info = {}
   const rows = []
+  const frags = [] // mga piraso ng pangalan na naputol sa ibang linya (maaaring nasa itaas o ibaba ng row)
   const issues = []
   let inTable = false
   for (let n = 0; n < lines.length; n++) {
@@ -72,20 +73,33 @@ export function parseTable(items) {
     if (/^Workflow Gap Summary/.test(line)) { inTable = false; continue }
     if (!inTable) continue
 
-    if (/^(Yes|No)$/i.test(cells[0]) && cells.length >= 4) {
+    if (/^(Yes|No)$/i.test(cells[0]) && cells.length >= 3) {
       const di = cells.findIndex((c) => RE_DATE.test(c))
       const ti = di >= 0 ? cells.findIndex((c, k) => k > di && RE_TIME.test(c)) : -1
       if (di < 0 || ti < 0) { issues.push(`Hindi nabasa ang row: "${line}"`); continue }
       const mid = cells.slice(1, di)
-      if (mid.length < 2) { issues.push(`Kulang ang Subitem/Label sa row: "${line}"`); continue }
-      const label = mid[mid.length - 1], title = mid.slice(0, -1).join(' ')
+      if (mid.length < 1) { issues.push(`Walang Label sa row: "${line}"`); continue }
+      const label = mid[mid.length - 1], own = mid.slice(0, -1).join(' ')
       const gapText = cells[ti + 1] && RE_GAP.test(cells[ti + 1]) ? cells[ti + 1] : null
-      rows.push({ done: /^yes$/i.test(cells[0]), title, label, dateText: cells[di], timeText: cells[ti], gapText, gap: parseGap(gapText) })
-    } else if (rows.length && cells.length === 1 && !RE_DATE.test(cells[0])) {
-      rows[rows.length - 1].title += ' ' + cells[0] // naputol na pangalan sa susunod na linya
+      rows.push({ y: lines[n].y, own, done: /^yes$/i.test(cells[0]), label, dateText: cells[di], timeText: cells[ti], gapText, gap: parseGap(gapText) })
+    } else if (cells.length === 1 && !RE_DATE.test(cells[0])) {
+      frags.push({ y: lines[n].y, text: cells[0] })
     }
   }
-  rows.forEach((r) => { r.ms = toMs(r.dateText, r.timeText) })
+  // Ilagay ang bawat naputol na piraso sa pinakamalapit na row (ayon sa y)
+  const parts = rows.map((r) => (r.own ? [{ y: r.y, text: r.own }] : []))
+  for (const f of frags) {
+    if (!rows.length) break
+    let best = 0
+    rows.forEach((r, i) => { if (Math.abs(r.y - f.y) < Math.abs(rows[best].y - f.y)) best = i })
+    parts[best].push(f)
+  }
+  rows.forEach((r, i) => {
+    r.title = parts[i].sort((a, b) => b.y - a.y).map((p) => p.text).join(' ').trim() // mas mataas ang y = mas nasa itaas
+    delete r.own; delete r.y
+    if (!r.title) issues.push(`Walang pangalan ang row na may Label na "${r.label}".`)
+    r.ms = toMs(r.dateText, r.timeText)
+  })
   info.totalGap = parseGap(info.totalGapText)
   return { info, rows, issues }
 }
@@ -149,4 +163,81 @@ export function compute({ act, rem, launchMs, replace = [] }) {
   const rank = { Activation: 0, Reminder: 1 }
   steps.sort((a, b) => a.ms - b.ms || rank[a.flow] - rank[b.flow] || a.order - b.order)
   return { steps, warnings, errors }
+}
+
+
+// ---------- Image/review -> PDF ----------
+// Format ng Gap sa PDF nila: "0hrs", "12hrs 30mins", "1day", "6days", "4days 7hours", "3days 12hours 30mins"
+export function formatGapPdf(min) {
+  if (min == null || min <= 0) return '0hrs'
+  const d = Math.floor(min / 1440), h = Math.floor((min % 1440) / 60), m = min % 60
+  const out = []
+  if (d) out.push(`${d}day${d > 1 ? 's' : ''}`)
+  if (h) out.push(d ? `${h}hours` : `${h}hrs`)
+  if (m) out.push(`${m}mins`)
+  return out.join(' ')
+}
+export const dateText = (ms) => { const d = new Date(ms); return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}` }
+export const timeText = (ms) => { const d = new Date(ms), h = d.getUTCHours(); return `${h % 12 || 12}:${String(d.getUTCMinutes()).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}` }
+
+// Ang flow ng isang row: Reminder kung ang label o pangalan ay may "Reminder"/"Rem"; kung hindi, Activation
+export const guessFlow = (r) => (/reminder/i.test(r.label || '') || /^rem[\s\d]/i.test((r.title || '').trim()) ? 'Reminder' : 'Activation')
+
+// steps: [{ flow, title, label, ms }]  ->  idinadagdag ang gap (minuto, mula sa nakaraang step ng parehong flow)
+export function withGaps(steps) {
+  const last = {}
+  return steps.map((s) => {
+    const prev = last[s.flow]
+    const gap = prev == null ? 0 : Math.round((s.ms - prev) / MIN)
+    last[s.flow] = s.ms
+    return { ...s, gap }
+  })
+}
+
+// Dagdag na pagsusuri laban sa maling pagbasa (mga code, numero, haba ng panahon)
+const CODE_RE = /[A-Z]{2,6}-\d{4}[A-Z]{0,4}/
+export function patternChecks(steps) {
+  const out = []
+  const codes = [...new Set(steps.map((s) => (s.title || '').match(CODE_RE)?.[0]).filter(Boolean))]
+  if (codes.length > 1) out.push(`May magkakaibang code sa mga pangalan (${codes.join(', ')}). Iisa dapat ang code ng isang campaign — suriin ang mga pangalan.`)
+  // "Rem Call 1, 2, 4" -> kulang ang 3 (isang numero lang sa pangalan, hindi bababa sa 3 row)
+  const groups = {}
+  for (const s of steps) {
+    const t = (s.title || '').replace(CODE_RE, '').trim(), nums = t.match(/\d+/g)
+    if (nums && nums.length === 1) (groups[t.replace(/\d+/, '#')] ||= []).push(Number(nums[0]))
+  }
+  for (const [k, list] of Object.entries(groups)) {
+    const u = [...new Set(list)].sort((a, b) => a - b)
+    if (u.length < 3) continue
+    const miss = []
+    for (let n = u[0]; n < u[u.length - 1]; n++) if (!u.includes(n)) miss.push(n)
+    if (miss.length) out.push(`"${k.replace('#', 'N')}": kulang ang numero ${miss.join(', ')} (nakita: ${u.join(', ')}).`)
+  }
+  const ms = steps.map((s) => s.ms).filter((x) => x != null)
+  if (ms.length > 1 && (Math.max(...ms) - Math.min(...ms)) / 86400000 > 62) out.push('Higit 62 araw ang pagitan ng una at huling step. Tiyaking tama ang taon at mga petsa.')
+  return out
+}
+
+export function validateReview(steps) {
+  const errors = [], warnings = []
+  for (const flow of ['Activation', 'Reminder']) {
+    const list = steps.filter((s) => s.flow === flow)
+    list.forEach((s, i) => {
+      if (!s.title?.trim()) errors.push(`${flow} #${i + 1}: walang pangalan.`)
+      if (s.ms == null || Number.isNaN(s.ms)) errors.push(`${flow} "${s.title || '#' + (i + 1)}": walang buong petsa/oras.`)
+      if (i > 0 && s.ms != null && list[i - 1].ms != null && s.ms < list[i - 1].ms) errors.push(`${flow} "${s.title}": mas maaga ito kaysa sa nakaraang step (${list[i - 1].title}).`)
+      if (s.uncertain) warnings.push(`${flow} "${s.title}": hindi tiyak ng AI${s.note ? ` — ${s.note}` : ''}. Suriin sa larawan.`)
+    })
+    const dup = list.map((s) => s.title.trim()).filter((t, i, a) => t && a.indexOf(t) !== i)
+    if (dup.length) errors.push(`${flow}: may pare-parehong pangalan: ${[...new Set(dup)].join(', ')}`)
+  }
+  warnings.push(...patternChecks(steps))
+  return { errors, warnings }
+}
+
+export function summaryOf(steps) {
+  const act = steps.filter((s) => s.flow === 'Activation'), rem = steps.filter((s) => s.flow === 'Reminder')
+  if (!act.length || !rem.length) return null
+  const total = Math.round((rem[0].ms - act[0].ms) / MIN)
+  return { total, totalText: formatGapPdf(total), from: act[0].title, to: rem[0].title }
 }

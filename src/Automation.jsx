@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { readSequencePdf } from './pdfRows.js'
+import ImageReview from './ImageReview.jsx'
 import { compute, formatGap, fmtTime12, msToDate, msToTime, dayMs, MIN } from './sequence.js'
 
 const niceDate = (iso) => new Date(iso + 'T00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -26,7 +27,8 @@ function Drop({ title, hint, doc, busy, onFile, onClear }) {
   )
 }
 
-export default function Automation({ boards, onCreate, onOpenBoard }) {
+export default function Automation({ boards, casinos = [], onCreate, onOpenBoard }) {
+  const [mode, setMode] = useState('pdf')
   const [act, setAct] = useState(null)
   const [rem, setRem] = useState(null)
   const [busy, setBusy] = useState('')
@@ -94,7 +96,12 @@ export default function Automation({ boards, onCreate, onOpenBoard }) {
 
   return (
     <div className="auto">
-      <div className="top"><div><h1>Automation</h1><p className="muted">I-upload ang Activation at Reminder PDF para makompyut ang buong schedule ng sequence.</p></div></div>
+      <div className="top"><div><h1>Automation</h1><p className="muted">Kompyutin ang sequence mula sa PDF, o gumawa ng PDF mula sa larawan.</p></div></div>
+      <div className="au-tabs">
+        <button className={mode === 'pdf' ? 'on' : ''} onClick={() => setMode('pdf')}>PDF → Schedule</button>
+        <button className={mode === 'image' ? 'on' : ''} onClick={() => setMode('image')}>Larawan → Review → PDF</button>
+      </div>
+      {mode === 'image' ? <ImageReview casinos={casinos} /> : (<>
 
       <div className="au-grid">
         <Drop title="Activation PDF" hint="Workflow Gap PDF ng Activation" doc={act} busy={busy === 'act'} onFile={(f) => load(f, 'act')} onClear={() => { setAct(null); setDone(null) }} />
@@ -139,6 +146,7 @@ export default function Automation({ boards, onCreate, onOpenBoard }) {
           </div>
         </section>
       )}
+      </>)}
     </div>
   )
 }

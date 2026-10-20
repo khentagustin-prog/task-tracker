@@ -29,3 +29,24 @@ npm run dev
 - `VITE_SUPABASE_URL` – used to build public file links
 
 `.env` is git-ignored. Never commit keys.
+
+## Automation
+
+**PDF → Schedule** – upload the Activation / Reminder "Workflow Gap" PDFs, pick a new launch date and add the computed
+subitems (Label, Date, Time) to a board. PDFs are read exactly (no AI) and every Date/Time is checked against its Gap.
+
+**Image → Review → PDF** – upload a screenshot of the subitem table. An AI reads it (n8n workflow `extract`), the app computes
+the gap of every step, you review the result next to the image, then download two PDFs: **Activation** (Warm Up, Full Seq,
+Special Text) and **Reminder** (Call / Text Reminder).
+
+### Set up the image workflow in n8n
+1. Build the file (keeps credentials out of git):
+   `AUTH_CRED_ID=<id of the Header Auth credential used by the other webhooks> node n8n/build-extract-workflow.mjs n8n/extract-out.json`
+   (or import `n8n/extract-workflow.json` and select the credential on the **Extract Hook** node).
+2. n8n → Workflows → **Import from File**.
+3. Open the **Claude (read image)** node → create a **Header Auth** credential: Name **`x-api-key`**, Value = your Anthropic API key.
+4. Open **Extract Hook** → choose the same Header Auth credential as the other webhooks (`x-app-key`).
+5. **Activate** the workflow. Set a spending limit in the Anthropic console.
+
+Accuracy rules: nothing is exported until you tick the confirmation box; rows the AI is unsure about are highlighted; the app
+warns about mixed campaign codes, missing numbers (e.g. Rem Call 1, 2, 4) and impossible date ranges.

@@ -311,7 +311,7 @@ function Main() {
         {view === 'dashboard' ? (
           <Dashboard tasks={tasks} statuses={statuses} boards={allGroups} colorOf={colorOf} onOpenTask={setOpenId} onOpenBoard={(b) => pickBoard(b)} />
         ) : view === 'automation' ? (
-          <Automation boards={allGroups} onCreate={async (task) => { await run(() => api.create(task)) }} onOpenBoard={(b) => pickBoard(b)} />
+          <Automation boards={allGroups} casinos={[...new Set(tasks.map((t) => t.title))]} onCreate={async (task) => { await run(() => api.create(task)) }} onOpenBoard={(b) => pickBoard(b)} />
         ) : view === 'archive' ? (
           <Archive items={archived} statuses={statuses} colorOf={colorOf} onOpen={setOpenId}
             onRestore={(t) => patch(t.id, { archived: false })}

@@ -5,6 +5,8 @@ import TaskModal from './TaskModal.jsx'
 import ConfirmModal from './ConfirmModal.jsx'
 import DuplicateModal from './DuplicateModal.jsx'
 import { shiftDate } from './dates.js'
+import AccessGate from './AccessGate.jsx'
+import { setKey, clearKey } from './auth.js'
 import Archive from './Archive.jsx'
 import Dashboard from './Dashboard.jsx'
 import Settings from './Settings.jsx'
@@ -50,7 +52,7 @@ function Stat({ label, value, color }) {
   )
 }
 
-export default function App() {
+function Main() {
   const [allTasks, setTasks] = useState([])
   const tasks = useMemo(() => allTasks.filter((t) => !t.archived), [allTasks])
   const archived = useMemo(() => allTasks.filter((t) => t.archived), [allTasks])
@@ -539,4 +541,17 @@ export default function App() {
       )}
     </div>
   )
+}
+
+export default function App() {
+  const [locked, setLocked] = useState(() => api.mode === 'n8n' && !api.hasKey())
+  const [msg, setMsg] = useState('')
+  const [round, setRound] = useState(0)
+  useEffect(() => {
+    const h = () => { clearKey(); setMsg('Mali ang access key. Subukan ulit.'); setLocked(true) }
+    window.addEventListener('auth-failed', h)
+    return () => window.removeEventListener('auth-failed', h)
+  }, [])
+  if (locked) return <AccessGate message={msg} onSubmit={(k) => { setKey(k); setMsg(''); setLocked(false); setRound((r) => r + 1) }} />
+  return <Main key={round} />
 }

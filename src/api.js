@@ -1,8 +1,8 @@
 import { track } from './net.js'
+import { getKey, authFailed } from './auth.js'
 // Data layer: n8n webhooks kung may VITE_N8N_BASE_URL, kung wala localStorage.
 const BASE = import.meta.env.VITE_N8N_BASE_URL
 const KEY = 'tasks-v1'
-const AUTH = { 'x-app-key': import.meta.env.VITE_API_KEY || '' }
 
 const local = {
   load: () => { try { return JSON.parse(localStorage.getItem(KEY)) || [] } catch { return [] } },
@@ -12,10 +12,10 @@ const local = {
 async function call(path, method, body) {
   const res = await track(fetch(`${BASE}${path}`, {
     method,
-    headers: { 'Content-Type': 'application/json', ...AUTH },
+    headers: { 'Content-Type': 'application/json', 'x-app-key': getKey() },
     body: body ? JSON.stringify(body) : undefined,
   }))
-  if (res.status === 403) throw new Error('Walang pahintulot (mali o kulang ang VITE_API_KEY)')
+  if (res.status === 403) { authFailed(); throw new Error('Walang pahintulot (mali ang access key)') }
   if (!res.ok) throw new Error(`n8n ${res.status}`)
   const text = await res.text()
   return text ? JSON.parse(text) : []
@@ -23,6 +23,7 @@ async function call(path, method, body) {
 
 export const api = {
   mode: BASE ? 'n8n' : 'local',
+  hasKey: () => Boolean(getKey()),
   async list() {
     return BASE ? call('/tasks', 'GET') : local.load()
   },

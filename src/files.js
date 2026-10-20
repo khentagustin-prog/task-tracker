@@ -1,4 +1,5 @@
 import { track } from './net.js'
+import { getKey, authFailed } from './auth.js'
 // File uploads diretso sa Supabase Storage (bucket: task-files).
 const URL_ = import.meta.env.VITE_SUPABASE_URL
 const KEY = import.meta.env.VITE_SUPABASE_KEY
@@ -6,7 +7,6 @@ const BUCKET = 'task-files'
 const headers = { apikey: KEY, Authorization: `Bearer ${KEY}` }
 
 const N8N = import.meta.env.VITE_N8N_BASE_URL
-const APP_KEY = import.meta.env.VITE_API_KEY || ''
 export const filesEnabled = Boolean(N8N || (URL_ && KEY))
 
 // XHR (hindi fetch) para may totoong upload progress. onProgress(0..100)
@@ -20,7 +20,7 @@ export function uploadFile(taskId, file, onProgress = () => {}) {
     if (N8N) {
       body = new FormData(); body.append('file', file, file.name)
       xhr.open('POST', `${N8N}/upload?path=${encodeURIComponent(path)}`)
-      xhr.setRequestHeader('x-app-key', APP_KEY)
+      xhr.setRequestHeader('x-app-key', getKey())
     } else {
       body = file
       xhr.open('POST', `${URL_}/storage/v1/object/${BUCKET}/${path}`)
@@ -28,7 +28,7 @@ export function uploadFile(taskId, file, onProgress = () => {}) {
       xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
     }
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(Math.min(99, Math.round((e.loaded / e.total) * 100)))
-    xhr.onload = () => { if (xhr.status >= 200 && xhr.status < 300) { onProgress(100); resolve(result) } else reject(new Error(`Upload failed (${xhr.status})`)) }
+    xhr.onload = () => { if (xhr.status >= 200 && xhr.status < 300) { onProgress(100); resolve(result) } else { if (xhr.status === 403) authFailed(); reject(new Error(xhr.status === 403 ? 'Walang pahintulot (mali ang access key)' : `Upload failed (${xhr.status})`)) } }
     xhr.onerror = () => reject(new Error('Walang internet o hindi maabot ang server'))
     xhr.send(body)
   }))
@@ -36,7 +36,7 @@ export function uploadFile(taskId, file, onProgress = () => {}) {
 
 export async function deleteFile(path) {
   if (N8N) {
-    const r = await fetch(`${N8N}/upload?path=${encodeURIComponent(path)}`, { method: 'DELETE', headers: { 'x-app-key': APP_KEY } })
+    const r = await fetch(`${N8N}/upload?path=${encodeURIComponent(path)}`, { method: 'DELETE', headers: { 'x-app-key': getKey() } })
     if (!r.ok) throw new Error(`Delete failed (${r.status})`)
     return
   }

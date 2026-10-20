@@ -1,0 +1,22 @@
+import { useState } from 'react'
+
+export default function AccessGate({ message, onSubmit }) {
+  const [v, setV] = useState('')
+  const [show, setShow] = useState(false)
+  return (
+    <div className="gate">
+      <form className="gate-card" onSubmit={(e) => { e.preventDefault(); if (v.trim()) onSubmit(v.trim()) }}>
+        <div className="gate-logo">✓</div>
+        <h1>TaskFlow</h1>
+        <p>Ilagay ang access key para makapasok.</p>
+        <div className="gate-input">
+          <input autoFocus type={show ? 'text' : 'password'} placeholder="Access key" value={v} onChange={(e) => setV(e.target.value)} autoComplete="current-password" />
+          <button type="button" onClick={() => setShow(!show)}>{show ? 'Hide' : 'Show'}</button>
+        </div>
+        {message && <div className="m-err" style={{ marginTop: 8 }}>{message}</div>}
+        <button className="primary" disabled={!v.trim()}>Unlock</button>
+        <small>Ise-save lang ito sa browser na ito.</small>
+      </form>
+    </div>
+  )
+}

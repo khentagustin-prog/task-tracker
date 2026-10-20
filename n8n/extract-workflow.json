@@ -29,7 +29,7 @@
     },
     {
       "id": "build-request",
-      "name": "Build Claude Request",
+      "name": "Build Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -37,7 +37,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const bin = $input.first().binary && $input.first().binary.image\nif (!bin) return [{ json: { error: 'Walang larawan. Ipadala ang file sa field na \"image\".' } }]\nconst ok = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']\nconst mediaType = bin.mimeType === 'image/jpg' ? 'image/jpeg' : bin.mimeType\nif (!ok.includes(mediaType)) return [{ json: { error: 'Ang larawan ay dapat PNG, JPG, WEBP o GIF (nakuha: ' + bin.mimeType + ').' } }]\nconst buf = await this.helpers.getBinaryDataBuffer(0, 'image')\nif (buf.length > 5 * 1024 * 1024) return [{ json: { error: 'Masyadong malaki ang larawan (higit 5 MB). Paliitin o i-crop ito.' } }]\nconst body = {\n  model: 'claude-opus-5-5',\n  max_tokens: 16000,\n  thinking: { type: 'adaptive' },\n  output_config: { effort: 'high', format: { type: 'json_schema', schema: {\"type\":\"object\",\"properties\":{\"rows\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\"},\"label\":{\"type\":\"string\"},\"month\":{\"type\":\"integer\"},\"day\":{\"type\":\"integer\"},\"time\":{\"type\":\"string\"},\"uncertain\":{\"type\":\"boolean\"},\"note\":{\"type\":\"string\"}},\"required\":[\"title\",\"label\",\"month\",\"day\",\"time\",\"uncertain\",\"note\"],\"additionalProperties\":false}}},\"required\":[\"rows\"],\"additionalProperties\":false} } },\n  system: 'You are a precise transcription tool. You copy what is visible and never guess.',\n  messages: [{ role: 'user', content: [\n    { type: 'image', source: { type: 'base64', media_type: mediaType, data: buf.toString('base64') } },\n    { type: 'text', text: \"This image is a screenshot of a project-board subitem table. Transcribe EVERY row, top to bottom, exactly as it is shown.\\n\\nColumns to read: Subitem (the name), Label, Date (month and day only, no year), Time (12-hour with AM/PM).\\n\\nStrict rules:\\n- Copy each Subitem name character for character. Keep codes such as BAY-1126CT, spacing, slashes and capitalisation exactly as shown. Never correct, shorten or reformat a name.\\n- Label: copy the visible text. If the label is cut off with \\\"...\\\" in the image, return only the visible text without the ellipsis, set uncertain to true and explain in note.\\n- Date: month as a number 1-12 and day as a number. Time: convert to 24-hour \\\"HH:MM\\\" (04:30 PM -> \\\"16:30\\\", 10:00 AM -> \\\"10:00\\\", 12:00 AM -> \\\"00:00\\\", 12:00 PM -> \\\"12:00\\\").\\n- Include a row only if its Subitem, Date and Time are all readable. A row that is cut off at the edge of the image and not fully readable must be left out.\\n- If any value is blurry, ambiguous or guessed, set uncertain to true and describe the doubt in note. Otherwise uncertain is false and note is an empty string.\\n- Do not invent, merge, skip or reorder rows. Ignore checkboxes, owner avatars, chat icons and any other column.\" },\n  ] }],\n}\nreturn [{ json: { body } }]"
+        "jsCode": "const bin = $input.first().binary && $input.first().binary.image\nif (!bin) return [{ json: { error: 'Walang larawan. Ipadala ang file sa field na \"image\".' } }]\nconst ok = ['image/png', 'image/jpeg', 'image/webp']\nconst mediaType = bin.mimeType === 'image/jpg' ? 'image/jpeg' : bin.mimeType\nif (!ok.includes(mediaType)) return [{ json: { error: 'Ang larawan ay dapat PNG, JPG o WEBP (nakuha: ' + bin.mimeType + ').' } }]\nconst buf = await this.helpers.getBinaryDataBuffer(0, 'image')\nif (buf.length > 4 * 1024 * 1024) return [{ json: { error: 'Masyadong malaki ang larawan (higit 4 MB). Paliitin o i-crop ito.' } }]\nconst url = 'data:' + mediaType + ';base64,' + buf.toString('base64')\nconst make = (temperature) => ({\n  model: \"qwen/qwen3.8-27b\",\n  temperature,\n  max_completion_tokens: 8000,\n  reasoning_format: 'hidden',\n  response_format: { type: 'json_schema', json_schema: { name: 'rows', strict: true, schema: {\"type\":\"object\",\"properties\":{\"rows\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\"},\"label\":{\"type\":\"string\"},\"month\":{\"type\":\"integer\"},\"day\":{\"type\":\"integer\"},\"time\":{\"type\":\"string\"},\"uncertain\":{\"type\":\"boolean\"},\"note\":{\"type\":\"string\"}},\"required\":[\"title\",\"label\",\"month\",\"day\",\"time\",\"uncertain\",\"note\"],\"additionalProperties\":false}}},\"required\":[\"rows\"],\"additionalProperties\":false} } },\n  messages: [\n    { role: 'system', content: \"You are a precise transcription tool. You copy what is visible and never guess.\" },\n    { role: 'user', content: [ { type: 'text', text: \"This image is a screenshot of a project-board subitem table. Transcribe EVERY row, top to bottom, exactly as it is shown.\\n\\nColumns to read: Subitem (the name), Label, Date (month and day only, no year), Time (12-hour with AM/PM).\\n\\nStrict rules:\\n- Copy each Subitem name character for character. Keep codes such as BAY-1126CT, spacing, slashes and capitalisation exactly as shown. Never correct, shorten or reformat a name.\\n- Label: copy the visible text. If the label is cut off with \\\"...\\\" in the image, return only the visible text without the ellipsis, set uncertain to true and explain in note.\\n- Date: month as a number 1-12 and day as a number. Time: convert to 24-hour \\\"HH:MM\\\" (04:30 PM -> \\\"16:30\\\", 10:00 AM -> \\\"10:00\\\", 12:00 AM -> \\\"00:00\\\", 12:00 PM -> \\\"12:00\\\").\\n- Include a row only if its Subitem, Date and Time are all readable. A row that is cut off at the edge of the image and not fully readable must be left out.\\n- If any value is blurry, ambiguous or guessed, set uncertain to true and describe the doubt in note. Otherwise uncertain is false and note is an empty string.\\n- Do not invent, merge, skip or reorder rows. Ignore checkboxes, owner avatars, chat icons and any other column.\" }, { type: 'image_url', image_url: { url } } ] },\n  ],\n})\nreturn [{ json: { body: make(0.1) } }]"
       }
     },
     {
@@ -73,8 +73,8 @@
       }
     },
     {
-      "id": "claude",
-      "name": "Claude (read image)",
+      "id": "groq-1",
+      "name": "Groq read",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -82,18 +82,20 @@
         -80
       ],
       "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_ME",
+          "name": "grock"
+        }
+      },
       "parameters": {
         "method": "POST",
-        "url": "https://api.anthropic.com/v1/messages",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "anthropic-version",
-              "value": "2023-06-01"
-            },
             {
               "name": "content-type",
               "value": "application/json"
@@ -102,24 +104,111 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "jsonBody": "={{ JSON.stringify($('Build Request').first().json.body) }}",
         "options": {
-          "timeout": 180000
+          "timeout": 120000
         }
       },
-      "notes": "Gumawa ng Header Auth credential: Name = x-api-key, Value = ANTHROPIC API KEY mo."
+      "notes": "Gumagamit ng umiiral na Header Auth credential na \"grock\" (Authorization: Bearer <Groq key>)."
     },
     {
-      "id": "parse",
-      "name": "Validate Answer",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "id": "failed",
+      "name": "Read failed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
       "position": [
         1040,
         -80
       ],
       "parameters": {
-        "jsCode": "const r = $input.first().json\nif (r.error && typeof r.error === 'string') return [{ json: { error: r.error } }]\nif (r.body === undefined && r.type === undefined && r.content === undefined) return [{ json: { error: 'Walang sagot mula sa AI.' } }]\nif (r.type === 'error') return [{ json: { error: 'Error mula sa AI: ' + ((r.error && r.error.message) || 'hindi malaman') } }]\nif (r.stop_reason === 'refusal') return [{ json: { error: 'Tumanggi ang AI na basahin ang larawan.' } }]\nif (r.stop_reason === 'max_tokens') return [{ json: { error: 'Naputol ang sagot ng AI (masyadong mahaba). Subukan ang mas maliit na larawan.' } }]\nconst block = (r.content || []).find((b) => b.type === 'text')\nif (!block) return [{ json: { error: 'Walang laman ang sagot ng AI.' } }]\nlet data\ntry { data = JSON.parse(block.text) } catch (e) { return [{ json: { error: 'Hindi mabasa ang sagot ng AI (hindi tamang JSON).' } }] }\nif (!data || !Array.isArray(data.rows) || !data.rows.length) return [{ json: { error: 'Walang nakitang row sa larawan.' } }]\nconst bad = []\nconst rows = data.rows.map((x, i) => {\n  const row = {\n    title: String(x.title == null ? '' : x.title).trim(), label: String(x.label == null ? '' : x.label).trim(),\n    month: Number(x.month), day: Number(x.day), time: String(x.time == null ? '' : x.time).trim(),\n    uncertain: Boolean(x.uncertain), note: String(x.note == null ? '' : x.note),\n  }\n  const m = row.time.match(/^(\\d{2}):(\\d{2})$/)\n  if (!row.title) bad.push('row ' + (i + 1) + ': walang pangalan')\n  if (!(row.month >= 1 && row.month <= 12 && Number.isInteger(row.month))) bad.push('row ' + (i + 1) + ': hindi tamang buwan')\n  if (!(row.day >= 1 && row.day <= 31 && Number.isInteger(row.day))) bad.push('row ' + (i + 1) + ': hindi tamang araw')\n  if (!m || +m[1] > 23 || +m[2] > 59) bad.push('row ' + (i + 1) + ': hindi tamang oras \"' + row.time + '\"')\n  return row\n})\nif (bad.length) return [{ json: { error: 'May hindi tamang laman ang sagot ng AI: ' + bad.slice(0, 5).join('; ') } }]\nreturn [{ json: { rows } }]"
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c3",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "pause",
+      "name": "Wait 30s (rate limit)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1300,
+        -160
+      ],
+      "webhookId": "extract-pause",
+      "parameters": {
+        "amount": 30,
+        "unit": "seconds"
+      },
+      "notes": "Kapag na-rate limit ng Groq (limitasyon bawat minuto), maghihintay ng 30 segundo at uulitin nang isang beses."
+    },
+    {
+      "id": "groq-retry",
+      "name": "Groq read (retry)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1560,
+        -80
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_ME",
+          "name": "grock"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Build Request').first().json.body) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "notes": "Gumagamit ng umiiral na Header Auth credential na \"grock\" (Authorization: Bearer <Groq key>)."
+    },
+    {
+      "id": "compare",
+      "name": "Validate Answer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1820,
+        -80
+      ],
+      "parameters": {
+        "jsCode": "const clean = (r, label) => {\n  if (!r || typeof r !== 'object') return { error: label + ': walang sagot.' }\n  if (r.error) return { error: label + ': ' + (typeof r.error === 'string' ? r.error : (r.error.message || 'error mula sa AI')) }\n  const ch = r.choices && r.choices[0]\n  if (!ch) return { error: label + ': walang sagot mula sa AI.' }\n  if (ch.finish_reason === 'length') return { error: label + ': naputol ang sagot (masyadong mahaba).' }\n  let t = String((ch.message && ch.message.content) || '')\n  t = t.replace(/<think>[\\s\\S]*?<\\/think>/g, '').replace(/^\\s*```(?:json)?/i, '').replace(/```\\s*$/, '').trim()\n  let data\n  try { data = JSON.parse(t) } catch (e) { return { error: label + ': hindi tamang JSON ang sagot.' } }\n  if (!data || !Array.isArray(data.rows) || !data.rows.length) return { error: label + ': walang nakitang row sa larawan.' }\n  const bad = []\n  const rows = data.rows.map((x, i) => {\n    const row = { title: String(x.title == null ? '' : x.title).trim(), label: String(x.label == null ? '' : x.label).trim(), month: Number(x.month), day: Number(x.day), time: String(x.time == null ? '' : x.time).trim(), uncertain: Boolean(x.uncertain), note: String(x.note == null ? '' : x.note) }\n    const m = row.time.match(/^(\\d{2}):(\\d{2})$/)\n    if (!row.title) bad.push('row ' + (i + 1) + ': walang pangalan')\n    if (!(Number.isInteger(row.month) && row.month >= 1 && row.month <= 12)) bad.push('row ' + (i + 1) + ': hindi tamang buwan')\n    if (!(Number.isInteger(row.day) && row.day >= 1 && row.day <= 31)) bad.push('row ' + (i + 1) + ': hindi tamang araw')\n    if (!m || +m[1] > 23 || +m[2] > 59) bad.push('row ' + (i + 1) + ': hindi tamang oras \"' + row.time + '\"')\n    return row\n  })\n  if (bad.length) return { error: label + ': ' + bad.slice(0, 4).join('; ') }\n  return { rows }\n}\nconst pick = (name) => { try { const j = $(name).first().json; return j } catch (e) { return null } }\nconst raw = pick('Groq read (retry)') || pick('Groq read')\nconst A = clean(raw, 'Pagbasa')\nif (A.error) return [{ json: { error: 'Hindi nabasa ng AI ang larawan. ' + A.error + ' Subukan ulit pagkalipas ng isang minuto.' } }]\nreturn [{ json: { rows: A.rows, warnings: [] } }]"
       }
     },
     {
@@ -128,7 +217,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        1300,
+        2080,
         0
       ],
       "parameters": {
@@ -153,14 +242,14 @@
       "main": [
         [
           {
-            "node": "Build Claude Request",
+            "node": "Build Request",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Claude Request": {
+    "Build Request": {
       "main": [
         [
           {
@@ -175,7 +264,7 @@
       "main": [
         [
           {
-            "node": "Claude (read image)",
+            "node": "Groq read",
             "type": "main",
             "index": 0
           }
@@ -189,7 +278,47 @@
         ]
       ]
     },
-    "Claude (read image)": {
+    "Groq read": {
+      "main": [
+        [
+          {
+            "node": "Read failed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read failed?": {
+      "main": [
+        [
+          {
+            "node": "Wait 30s (rate limit)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validate Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 30s (rate limit)": {
+      "main": [
+        [
+          {
+            "node": "Groq read (retry)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq read (retry)": {
       "main": [
         [
           {

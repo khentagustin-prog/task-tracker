@@ -1,8 +1,16 @@
 import { useMemo, useRef, useState } from 'react'
 import { extractRows } from './extract.js'
-import { guessFlow, withGaps, validateReview, summaryOf, formatGapPdf, MIN } from './sequence.js'
+import { guessFlow, withGaps, validateReview, summaryOf, formatGapPdf, compareReads, MIN } from './sequence.js'
 import { buildSequencePdf } from './seqPdf.js'
 
+// Mga label na ginagamit sa mga PDF nila. Ang label na putol sa larawan ("Dynamic Call w ...") ay ibinabalik sa buong pangalan.
+const KNOWN_LABELS = ['Warm Up Text', 'Dynamic Call', 'Special Text', 'Call Reminder', 'Text Reminder']
+export function canonicalLabel(raw) {
+  const t = (raw || '').trim().replace(/\.{2,}|…/g, '').trim()
+  const low = t.toLowerCase()
+  const hit = KNOWN_LABELS.find((k) => low === k.toLowerCase()) || KNOWN_LABELS.find((k) => low.startsWith(k.toLowerCase())) || KNOWN_LABELS.find((k) => k.toLowerCase().startsWith(low) && low.length >= 4)
+  return hit || t
+}
 const todayText = () => { const d = new Date(); return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}` }
 const pad = (n) => String(n).padStart(2, '0')
 const toMs = (date, time) => (date && time ? Date.UTC(+date.slice(0, 4), +date.slice(5, 7) - 1, +date.slice(8, 10), +time.slice(0, 2), +time.slice(3, 5)) : null)
@@ -15,7 +23,7 @@ function toSteps(rows, year) {
     if (mo && prev && mo < prev - 6) y += 1
     if (mo) prev = mo
     const date = mo && r.day ? `${y}-${pad(mo)}-${pad(Number(r.day))}` : ''
-    const step = { id: i + '-' + Math.random().toString(36).slice(2, 6), title: (r.title || '').trim(), label: (r.label || '').trim(), date, time: r.time || '', uncertain: !!r.uncertain, note: r.note || '' }
+    const step = { idx: i, id: i + '-' + Math.random().toString(36).slice(2, 6), title: (r.title || '').trim(), label: canonicalLabel(r.label), date, time: r.time || '', uncertain: !!r.uncertain, note: r.note || '' }
     step.flow = guessFlow(step)
     return step
   })
@@ -36,6 +44,10 @@ export default function ImageReview({ casinos = [] }) {
   const [meta, setMeta] = useState({ title: '', casino: '', assignedTo: 'KHENT AGUSTIN', organization: 'TEAM TECH DEV', campaignDates: 'Not specified', workflow: '' })
   const input = useRef()
   const [casino, setCasino] = useState('')
+  const [aiWarn, setAiWarn] = useState([])
+  const [verify, setVerify] = useState(true)
+  const [vstate, setVstate] = useState(null) // { phase: 'wait'|'read'|'done'|'failed'|'skipped', left, diffs, warnings, msg }
+  const runRef = useRef(0)
   // Punan ang pamagat/campaign/workflow batay sa napiling casino at sa buwan ng unang step. Puwede pa ring baguhin.
   const fillFor = (name, list = steps) => {
     if (!name) return
@@ -53,10 +65,31 @@ export default function ImageReview({ casinos = [] }) {
     setFile(f); setUrl((u) => { if (u) URL.revokeObjectURL(u); return URL.createObjectURL(f) })
     read(f) // awtomatiko: pagka-upload, binabasa na agad
   }
-  const read = async (f = file) => {
-    setBusy(true); setErr(''); setConfirmed(false)
-    try { const st = toSteps(await extractRows(f), Number(year)); setSteps(st); if (casino) fillFor(casino, st) } catch (e) { setErr(e.message) } finally { setBusy(false) }
+  const sleep = (ms) => new Promise((res) => setTimeout(res, ms))
+  // Ikalawang, hiwalay na pagbasa pagkalipas ng 60s (limitasyon ng Groq ay bawat minuto). Ang hindi magkatugma ay minamarkahan.
+  const runVerify = async (f, firstRows, my) => {
+    for (let s = 60; s > 0; s--) { setVstate({ phase: 'wait', left: s }); await sleep(1000); if (runRef.current !== my) return }
+    setVstate({ phase: 'read' })
+    try {
+      const out2 = await extractRows(f)
+      if (runRef.current !== my) return
+      const { diffs, warnings } = compareReads(firstRows, out2.rows)
+      setSteps((prev) => prev && prev.map((x) => (diffs[x.idx] !== undefined ? { ...x, uncertain: true, note: [x.note, 'magkaiba ang ikalawang pagbasa -> ' + diffs[x.idx]].filter(Boolean).join('; ') } : x)))
+      setVstate({ phase: 'done', diffs: Object.keys(diffs).length, warnings })
+    } catch (e) { if (runRef.current === my) setVstate({ phase: 'failed', msg: e.message }) }
   }
+  const read = async (f = file) => {
+    const my = ++runRef.current
+    setBusy(true); setErr(''); setConfirmed(false); setVstate(null)
+    try {
+      const out = await extractRows(f)
+      if (runRef.current !== my) return
+      const st = toSteps(out.rows, Number(year)); setAiWarn(out.warnings); setSteps(st); if (casino) fillFor(casino, st)
+      setBusy(false)
+      if (verify) runVerify(f, out.rows, my)
+    } catch (e) { if (runRef.current === my) { setErr(e.message); setBusy(false) } }
+  }
+  const skipVerify = () => { runRef.current++; setVstate({ phase: 'skipped' }) }
   const upd = (id, p) => setSteps((s) => s.map((x) => (x.id === id ? { ...x, ...p, uncertain: p.title === undefined && p.label === undefined && p.date === undefined && p.time === undefined ? x.uncertain : false } : x)))
 
   const calc = useMemo(() => {
@@ -69,7 +102,8 @@ export default function ImageReview({ casinos = [] }) {
     return { withMs, gapOf, ...valid, summary: summaryOf(ok) }
   }, [steps])
 
-  const blocked = !calc || calc.errors.length > 0 || !confirmed
+  const verifying = vstate && (vstate.phase === 'wait' || vstate.phase === 'read')
+  const blocked = !calc || calc.errors.length > 0 || !confirmed || verifying
   const download = (flow) => {
     const list = calc.withMs.filter((s) => s.flow === flow)
     const rows = withGaps(list)
@@ -96,6 +130,7 @@ export default function ImageReview({ casinos = [] }) {
             <div className="au-info"><div className="au-file">🖼 {file.name}</div>
               <label className="au-year">Taon ng petsa<input type="number" value={year} onChange={(e) => setYear(e.target.value)} /></label>
               <small className="muted">Walang taon sa larawan, kaya ilagay ang tamang taon.</small>
+              <label className="au-verify"><input type="checkbox" checked={verify} onChange={(e) => setVerify(e.target.checked)} /> Basahin nang dalawang beses para sigurado <small>(ang ikalawa ay sa loob ng 1 minuto; ang hindi magkatugma ay mamarkahan)</small></label>
               {busy && <div className="muted">Binabasa ng AI ang larawan...</div>}
               {!busy && (steps || err) && <button className="ghost" onClick={() => read()}>Basahin ulit</button>}
             </div>
@@ -131,8 +166,16 @@ export default function ImageReview({ casinos = [] }) {
           <section className="d-card">
             <h3>Suriin ang resulta <small>{steps.length} steps · {nAct} Activation · {nRem} Reminder</small></h3>
             {calc.errors.map((m, i) => <div key={i} className="au-bad">⛔ {m}</div>)}
+            {vstate && vstate.phase === 'wait' && <div className="rv-verify">⏳ Sinusuri ng ikalawang pagbasa sa <b>{vstate.left}s</b> (para sa paghahambing). Puwede ka nang magsuri sa ngayon; hindi pa magagamit ang download. <button className="link" onClick={skipVerify}>Laktawan</button></div>}
+            {vstate && vstate.phase === 'read' && <div className="rv-verify">⏳ Binabasa ang larawan sa ikalawang pagkakataon... <button className="link" onClick={skipVerify}>Laktawan</button></div>}
+            {vstate && vstate.phase === 'done' && !vstate.diffs && !vstate.warnings.length && <div className="au-ok">✓ Magkatugma ang dalawang magkahiwalay na pagbasa ng AI.</div>}
+            {vstate && vstate.phase === 'done' && vstate.diffs > 0 && <div className="au-warn">⚠ May {vstate.diffs} row na magkaiba ang dalawang pagbasa. Naka-highlight ang mga ito; suriin sa larawan.</div>}
+            {vstate && vstate.phase === 'done' && vstate.warnings.map((m, i) => <div key={'vw' + i} className="au-warn">⚠ {m}</div>)}
+            {vstate && vstate.phase === 'failed' && <div className="au-warn">⚠ Hindi gumana ang ikalawang pagbasa ({vstate.msg}). Walang paghahambing, kaya suriing mabuti ang bawat row.</div>}
+            {vstate && vstate.phase === 'skipped' && <div className="au-warn">⚠ Nilaktawan ang ikalawang pagbasa. Suriing mabuti ang bawat row.</div>}
+            {aiWarn.map((m, i) => <div key={'ai' + i} className="au-warn">⚠ {m}</div>)}
             {calc.warnings.map((m, i) => <div key={i} className="au-warn">⚠ {m}</div>)}
-            {!calc.errors.length && !calc.warnings.length && <div className="au-ok">✓ Walang nakitang problema sa pagkakasunod-sunod ng petsa.</div>}
+            {!calc.errors.length && !calc.warnings.length && !aiWarn.length && !vstate && <div className="au-ok">✓ Walang nakitang problema sa pagkakasunod-sunod ng petsa.</div>}
             <div className="rv-split">
               <div className={`rv-img ${zoom ? 'zoom' : ''}`} onClick={() => setZoom(!zoom)} title="I-click para palakihin o paliitin"><img src={url} alt="sequence" /></div>
               <div className="rv-groups">
@@ -175,7 +218,8 @@ export default function ImageReview({ casinos = [] }) {
               <button className="primary" disabled={blocked || !nAct || !nRem} onClick={downloadBoth}>⬇ Download pareho (Activation + Reminder)</button>
               <button className="ghost" disabled={blocked || !nAct} onClick={() => download('Activation')}>Activation lang</button>
               <button className="ghost" disabled={blocked || !nRem} onClick={() => download('Reminder')}>Reminder lang</button>
-              {!confirmed && !calc.errors.length && <span className="muted">Lagyan muna ng tsek sa itaas.</span>}
+              {verifying && <span className="muted">Hintayin ang ikalawang pagbasa, o i-click ang Laktawan.</span>}
+              {!verifying && !confirmed && !calc.errors.length && <span className="muted">Lagyan muna ng tsek sa itaas.</span>}
               {calc.errors.length > 0 && <span className="muted">Ayusin muna ang mga ⛔.</span>}
             </div>
           </section>

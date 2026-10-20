@@ -4,7 +4,7 @@ import { getKey, authFailed } from './auth.js'
 const BASE = import.meta.env.VITE_N8N_BASE_URL
 
 // Ipinapadala ang larawan sa n8n (/extract) kung saan binabasa ito ng AI.
-// Ibinabalik: [{ title, label, month, day, time:'HH:MM'(24h), uncertain, note }]
+// Ibinabalik: { rows: [{ title, label, month, day, time:'HH:MM'(24h), uncertain, note }], warnings: [string] }
 export async function extractRows(file) {
   if (!BASE) throw new Error('Walang koneksyon sa n8n (VITE_N8N_BASE_URL).')
   const fd = new FormData()
@@ -27,5 +27,5 @@ export async function extractRows(file) {
   try { data = JSON.parse(text) } catch { data = null }
   if (!res.ok || !data) throw new Error(data?.error || `Hindi nabasa ng AI ang larawan (n8n ${res.status}).`)
   if (!Array.isArray(data.rows) || !data.rows.length) throw new Error(data.error || 'Walang nakitang row sa larawan.')
-  return data.rows
+  return { rows: data.rows, warnings: Array.isArray(data.warnings) ? data.warnings : [] }
 }

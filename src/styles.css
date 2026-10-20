@@ -752,3 +752,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .au-one { display: flex; flex-direction: column; gap: 4px; align-items: center; justify-content: center; text-align: center; padding: 22px 16px; margin: 16px 0 0; border: 1.5px dashed var(--line); border-radius: 12px; background: var(--surface); cursor: pointer; color: var(--muted); font-size: 13px }
 .au-one:hover { border-color: var(--blue); color: var(--blue) } .au-one b { color: var(--text); font-size: 15px; font-weight: 500 }
 .au-act .ghost { padding: 8px 14px; font-size: 13px }
+
+.au-verify { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; margin: 6px 0; cursor: pointer } .au-verify input { margin-top: 2px } .au-verify small { color: var(--muted) }
+
+.rv-verify { font-size: 12.5px; padding: 8px 12px; border: 1px dashed #f7900966; border-radius: 8px; color: #f79009; margin: 6px 0 } .rv-verify b { color: var(--text) }

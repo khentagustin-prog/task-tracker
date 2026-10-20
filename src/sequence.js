@@ -241,3 +241,23 @@ export function summaryOf(steps) {
   const total = Math.round((rem[0].ms - act[0].ms) / MIN)
   return { total, totalText: formatGapPdf(total), from: act[0].title, to: rem[0].title }
 }
+
+
+// Paghahambing ng dalawang magkahiwalay na pagbasa ng AI (rows: [{ title, label, month, day, time }]).
+// Ibinabalik: { diffs: { [index]: "paliwanag" }, warnings: [string] }
+export function compareReads(a, b) {
+  const diffs = {}, warnings = []
+  if (a.length !== b.length) warnings.push(`Magkaiba ang bilang ng row sa dalawang pagbasa (${a.length} vs ${b.length}). Suriin kung kulang o sobra.`)
+  a.forEach((r, i) => {
+    const q = b[i]
+    if (!q) { diffs[i] = 'wala sa ikalawang pagbasa'; return }
+    const d = []
+    if ((r.title || '').trim() !== (q.title || '').trim()) d.push(`pangalan: "${q.title}"`)
+    if ((r.label || '').trim().toLowerCase() !== (q.label || '').trim().toLowerCase()) d.push(`label: "${q.label}"`)
+    if (Number(r.month) !== Number(q.month) || Number(r.day) !== Number(q.day)) d.push(`petsa: ${q.month}/${q.day}`)
+    if ((r.time || '') !== (q.time || '')) d.push(`oras: ${q.time}`)
+    if (d.length) diffs[i] = d.join(', ')
+  })
+  if (a.length !== b.length) a.forEach((_, i) => { diffs[i] = diffs[i] ? `${diffs[i]}; magkaiba ang bilang ng row` : 'magkaiba ang bilang ng row sa dalawang pagbasa' })
+  return { diffs, warnings }
+}

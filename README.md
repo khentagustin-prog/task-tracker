@@ -39,14 +39,19 @@ subitems (Label, Date, Time) to a board. PDFs are read exactly (no AI) and every
 the gap of every step, you review the result next to the image, then download two PDFs: **Activation** (Warm Up, Full Seq,
 Special Text) and **Reminder** (Call / Text Reminder).
 
-### Set up the image workflow in n8n
-1. Build the file (keeps credentials out of git):
-   `AUTH_CRED_ID=<id of the Header Auth credential used by the other webhooks> node n8n/build-extract-workflow.mjs n8n/extract-out.json`
-   (or import `n8n/extract-workflow.json` and select the credential on the **Extract Hook** node).
-2. n8n → Workflows → **Import from File**.
-3. Open the **Claude (read image)** node → create a **Header Auth** credential: Name **`x-api-key`**, Value = your Anthropic API key.
-4. Open **Extract Hook** → choose the same Header Auth credential as the other webhooks (`x-app-key`).
-5. **Activate** the workflow. Set a spending limit in the Anthropic console.
+### Set up the image workflow in n8n (Groq)
+The image is read by Groq's vision model `qwen/qwen3.8-27b` through an n8n workflow (`POST /webhook/extract`).
 
-Accuracy rules: nothing is exported until you tick the confirmation box; rows the AI is unsure about are highlighted; the app
-warns about mixed campaign codes, missing numbers (e.g. Rem Call 1, 2, 4) and impossible date ranges.
+1. Build the file (keeps credential ids out of git):
+   `AUTH_CRED_ID=<Header Auth credential of the other webhooks> LLM_CRED_ID=<Header Auth credential holding your Groq key> node n8n/build-extract-workflow.mjs n8n/extract-out.json`
+   The Groq credential is a **Header Auth** credential: Name `Authorization`, Value `Bearer <your Groq API key>`.
+2. n8n -> Workflows -> **Import from File**, then **Activate**.
+3. `PROVIDER=claude` builds the Claude (Anthropic) variant instead.
+
+How a run works: one upload -> the app reads the image (n8n retries once after 30 s if Groq rate-limits) -> rows are split into
+Activation / Reminder -> **60 s later the app reads the image a second time** (Groq limits tokens per minute) and flags every
+row where the two reads disagree -> you review, tick the confirmation box and download both PDFs.
+
+Accuracy rules: nothing is exported until you tick the confirmation box and the double-check has finished (or you skip it);
+rows the AI is unsure about or that differ between the two reads are highlighted; known labels are normalised ("Dynamic Call w ..."
+becomes "Dynamic Call"); the app warns about mixed campaign codes, missing numbers (e.g. Rem Call 1, 2, 4) and impossible date ranges.

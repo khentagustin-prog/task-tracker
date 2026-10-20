@@ -7,6 +7,7 @@ import DuplicateModal from './DuplicateModal.jsx'
 import { shiftDate } from './dates.js'
 import AccessGate from './AccessGate.jsx'
 import { setKey, clearKey } from './auth.js'
+import Automation from './Automation.jsx'
 import Archive from './Archive.jsx'
 import Dashboard from './Dashboard.jsx'
 import Settings from './Settings.jsx'
@@ -31,6 +32,8 @@ const PRIORITIES = [
 const GROUP_COLORS = ['#155eef', '#12b76a', '#7a5af8', '#f79009', '#f04438', '#06aed4']
 const byId = (list, id) => list.find((x) => x.id === id) || list[0]
 const allFiles = (t) => [...(t.attachments || []), ...(t.subtasks || []).flatMap((x) => x.attachments || [])]
+const LABEL_COLORS = { 'warm up text': '#7fb0c5', 'dynamic call': '#4a6fa5', 'special text': '#5bbcf0', 'call reminder': '#f26d6d', 'text reminder': '#f29c9c' }
+const labelColor = (n) => LABEL_COLORS[n.trim().toLowerCase()] || ['#6c8ebf', '#8e7cc3', '#6aa84f', '#c27ba0', '#e69138', '#45818e'][[...n].reduce((a, c) => a + c.charCodeAt(0), 0) % 6]
 const initials = (n) => n.trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()
 const fmtTime = (v) => { if (!v) return null; const [h, m] = v.split(':').map(Number); return [`${String(h % 12 || 12).padStart(2, '0')}:${String(m).padStart(2, '0')}`, h >= 12 ? 'PM' : 'AM'] }
 const today = () => new Date().toISOString().slice(0, 10)
@@ -285,6 +288,7 @@ function Main() {
         <div className="side-label">Workspace</div>
         <nav>
           <button className={view === 'dashboard' ? 'on' : ''} onClick={() => setView('dashboard')}>◔ Dashboard</button>
+          <button className={view === 'automation' ? 'on' : ''} onClick={() => setView('automation')}>⚡ Automation</button>
           <button className={view === 'archive' ? 'on' : ''} onClick={() => setView('archive')}>▤ Archive<em>{archived.length}</em></button>
         </nav>
         <div className="side-label">Boards</div>
@@ -306,6 +310,8 @@ function Main() {
       <main>
         {view === 'dashboard' ? (
           <Dashboard tasks={tasks} statuses={statuses} boards={allGroups} colorOf={colorOf} onOpenTask={setOpenId} onOpenBoard={(b) => pickBoard(b)} />
+        ) : view === 'automation' ? (
+          <Automation boards={allGroups} onCreate={async (task) => { await run(() => api.create(task)) }} onOpenBoard={(b) => pickBoard(b)} />
         ) : view === 'archive' ? (
           <Archive items={archived} statuses={statuses} colorOf={colorOf} onOpen={setOpenId}
             onRestore={(t) => patch(t.id, { archived: false })}
@@ -393,12 +399,14 @@ function Main() {
                               {!!(t.tags || []).length && <div className="chips">{t.tags.map((x) => <span key={x} className="chip" style={{ color: tagColor(x), background: tagColor(x) + '26' }}>{x}</span>)}</div>}
                               {t.notes && <p>{t.notes}</p>}
                               <div className="subs-wrap"><div className="subs" style={{ '--c': c }}>
-                                <div className="srow shead"><span>Subitem</span><span>Status</span><span>Owner</span><span>Date</span><span>Time</span><span>Notes</span><span>Files</span></div>
+                                <div className="srow shead"><span>Subitem</span><span>Label</span><span>Status</span><span>Owner</span><span>Date</span><span>Time</span><span>Notes</span><span>Files</span></div>
                                 {subs(t).map((x) => {
                                   const tm = fmtTime(x.time)
                                   return (
                                     <div key={x.id} className={`srow ${x.status === 'done' ? 'is-done' : ''}`} onContextMenu={(e) => { e.preventDefault(); setSubMenu({ x: e.clientX, y: e.clientY, t, sid: x.id }) }}>
                                       <input className="inline" key={x.id + x.title} defaultValue={x.title} onBlur={(e) => e.target.value.trim() && e.target.value !== x.title && editSub(t, x.id, { title: e.target.value.trim() })} />
+                                      <input className="lab-in" key={x.id + (x.label || '')} defaultValue={x.label || ''} style={x.label ? { background: labelColor(x.label) } : undefined}
+                                        onBlur={(e) => e.target.value.trim() !== (x.label || '') && editSub(t, x.id, { label: e.target.value.trim() })} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
                                       <Pill list={STATUSES} value={x.status} onChange={(v) => editSub(t, x.id, { status: v })} />
                                       <div className="c-owner">
                                         {ownerEdit === x.id

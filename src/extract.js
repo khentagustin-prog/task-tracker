@@ -3,7 +3,7 @@ import { accessToken } from './supabase.js'
 
 const BASE = import.meta.env.VITE_N8N_BASE_URL
 
-// Sends the image to n8n (/extract), where the AI reads it. n8n checks the signed-in user's Google session.
+// Sends the image to n8n (/extract), where the AI reads it. n8n checks the signed-in user's session.
 // Returns: { rows: [{ title, label, month, day, time:'HH:MM'(24h), uncertain, note }], warnings: [string] }
 export async function extractRows(file) {
   if (!BASE) throw new Error('Not connected to n8n (VITE_N8N_BASE_URL is missing).')
@@ -16,7 +16,7 @@ export async function extractRows(file) {
     // "Failed to fetch": no internet, or n8n answered with an error that has no CORS headers (e.g. the workflow is not active)
     throw new Error(navigator.onLine === false
       ? 'No connection to the internet. Check your connection and try again.'
-      : 'Cannot reach the "extract-auth" workflow in n8n. It is probably not active: open "Task Tracker - Extract (Google login)" in n8n and click Activate.')
+      : 'Cannot reach the "extract-auth" workflow in n8n. It is probably not active: open "Task Tracker - Extract (login)" in n8n and click Activate.')
   }
   const text = await res.text()
   let data

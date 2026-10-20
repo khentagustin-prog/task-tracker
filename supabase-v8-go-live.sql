@@ -108,7 +108,7 @@ declare uid uuid;
 begin
   select id into uid from auth.users where lower(email) = 'admin1@taskflow.local';
   if uid is null then
-    raise exception 'The account does not exist yet. Run step A (supabase-v8a-accounts-prepare.sql) first.';
+    raise exception 'The account admin1 was not created, so nothing was changed.';
   end if;
 
   insert into public.app_settings (owner, key, value)

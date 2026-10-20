@@ -634,3 +634,10 @@ main { max-width: 1120px }
 .gate-input:focus-within { border-color: var(--blue) }
 .gate-input input { flex: 1; border: 0; background: transparent; padding: 10px 12px; font: inherit; color: var(--text); outline: none; min-width: 0 }
 .gate-input button { border: 0; background: transparent; color: var(--muted); padding: 0 12px; cursor: pointer; font: inherit; font-size: 12px }
+
+/* subitem: Files column replaces the X column */
+.srow { grid-template-columns: minmax(0, 1.3fr) 104px 48px 70px 88px minmax(0, 1fr) 84px }
+.srow .c-files { border-left: 1px solid var(--line); min-height: 28px }
+.ctx { position: fixed; z-index: 50; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 32px #00000066; padding: 4px }
+:root[data-theme=dark] .ctx { background: #2d2d2d }
+.ctx button { all: unset; cursor: pointer; padding: 7px 12px; border-radius: 7px; font-size: 13px; color: #f97066; white-space: nowrap } .ctx button:hover { background: #f0443822 }

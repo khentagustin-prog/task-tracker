@@ -30,6 +30,7 @@ const PRIORITIES = [
 ]
 const GROUP_COLORS = ['#155eef', '#12b76a', '#7a5af8', '#f79009', '#f04438', '#06aed4']
 const byId = (list, id) => list.find((x) => x.id === id) || list[0]
+const allFiles = (t) => [...(t.attachments || []), ...(t.subtasks || []).flatMap((x) => x.attachments || [])]
 const initials = (n) => n.trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()
 const fmtTime = (v) => { if (!v) return null; const [h, m] = v.split(':').map(Number); return [`${String(h % 12 || 12).padStart(2, '0')}:${String(m).padStart(2, '0')}`, h >= 12 ? 'PM' : 'AM'] }
 const today = () => new Date().toISOString().slice(0, 10)
@@ -82,16 +83,17 @@ function Main() {
   const [upBusy, setUpBusy] = useState({})
   const [moveOpen, setMoveOpen] = useState(false)
   const [dup, setDup] = useState(null)
+  const [subMenu, setSubMenu] = useState(null)
   const [pop, setPop] = useState(null)
   const [preview, setPreview] = useState(null)
   const popTimer = useRef()
-  const openPop = (id, e, pin) => {
+  const openPop = (id, e, pin, sid) => {
     clearTimeout(popTimer.current)
     const r = e.currentTarget.getBoundingClientRect()
-    setPop((p) => ({ id, x: r.right, y: r.bottom + 6, pinned: !!pin || (p?.id === id && p.pinned) }))
+    setPop((p) => ({ id, sid, x: r.right, y: r.bottom + 6, pinned: !!pin || (p?.id === id && p.sid === sid && p.pinned) }))
   }
   const leavePop = () => { clearTimeout(popTimer.current); popTimer.current = setTimeout(() => setPop((p) => (p && p.pinned ? p : null)), 220) }
-  useEffect(() => { const c = () => setPop(null); window.addEventListener('click', c); return () => window.removeEventListener('click', c) }, [])
+  useEffect(() => { const c = () => { setPop(null); setSubMenu(null) }; window.addEventListener('click', c); return () => window.removeEventListener('click', c) }, [])
   const [confirmBulk, setConfirmBulk] = useState(false)
   const [bulkBusy, setBulkBusy] = useState(false)
   const [ownerEdit, setOwnerEdit] = useState(null)
@@ -178,7 +180,7 @@ function Main() {
     deleteBoard: async (name) => {
       const mine = allTasks.filter((t) => (t.group_name || 'Main') === name)
       await run(async () => {
-        await Promise.all(mine.flatMap((t) => (t.attachments || []).map((f) => deleteFile(f.path).catch(() => {}))))
+        await Promise.all(mine.flatMap((t) => allFiles(t).map((f) => deleteFile(f.path).catch(() => {}))))
         await Promise.all(mine.map((t) => api.remove(t.id)))
       })
       setExtra((e) => e.filter((x) => x !== name))
@@ -209,16 +211,29 @@ function Main() {
       patch(t.id, { attachments: [...(cur.attachments || []), ...added] })
     } catch (e) { setError(e.message) } finally { setUpBusy((b) => ({ ...b, [t.id]: false })) }
   }
+  const uploadSub = async (t, x, list) => {
+    setUpBusy((b) => ({ ...b, [x.id]: true }))
+    try {
+      const added = []
+      for (const f of list) added.push(await uploadFile(t.id, f))
+      const cur = (tasksRef.current.find((q) => q.id === t.id)?.subtasks || []).find((q) => q.id === x.id) || x
+      editSub(t, x.id, { attachments: [...(cur.attachments || []), ...added] })
+    } catch (e) { setError(e.message) } finally { setUpBusy((b) => ({ ...b, [x.id]: false })) }
+  }
   const subs = (t) => t.subtasks || []
   const latest = (t) => subs(tasksRef.current.find((x) => x.id === t.id) || t)
   const addSub = (t, title) => patch(t.id, { subtasks: [...latest(t), { id: crypto.randomUUID(), title, status: 'todo', due_date: null }] })
   const editSub = (t, sid, p) => patch(t.id, { subtasks: latest(t).map((x) => (x.id === sid ? { ...x, ...p } : x)) })
-  const delSub = (t, sid) => patch(t.id, { subtasks: latest(t).filter((x) => x.id !== sid) })
+  const delSub = (t, sid) => {
+    const gone = latest(t).find((x) => x.id === sid)
+    ;(gone?.attachments || []).forEach((f) => deleteFile(f.path).catch(() => {}))
+    patch(t.id, { subtasks: latest(t).filter((x) => x.id !== sid) })
+  }
 
   const cloneTask = (t, o) => ({
     id: crypto.randomUUID(), title: t.title, status: o.reset ? 'todo' : t.status, priority: t.priority, group_name: o.group_name,
     due_date: shiftDate(t.due_date, o.n, o.unit) || null, notes: o.notes ? (t.notes || '') : '', tags: t.tags || [], attachments: [],
-    subtasks: o.subs ? (t.subtasks || []).map((x) => ({ ...x, id: crypto.randomUUID(), status: o.reset ? 'todo' : x.status, due_date: shiftDate(x.due_date, o.n, o.unit) || null })) : [],
+    subtasks: o.subs ? (t.subtasks || []).map((x) => ({ ...x, id: crypto.randomUUID(), status: o.reset ? 'todo' : x.status, due_date: shiftDate(x.due_date, o.n, o.unit) || null, attachments: [] })) : [],
     ...(o.section && o.section !== o.group_name ? { section: o.section } : {}),
   })
   const visible = useMemo(() => tasks.filter((t) =>
@@ -294,7 +309,7 @@ function Main() {
         ) : view === 'archive' ? (
           <Archive items={archived} statuses={statuses} colorOf={colorOf} onOpen={setOpenId}
             onRestore={(t) => patch(t.id, { archived: false })}
-            onDelete={async (t) => { await Promise.all((t.attachments || []).map((f) => deleteFile(f.path).catch(() => {}))); await run(() => api.remove(t.id)) }} />
+            onDelete={async (t) => { await Promise.all(allFiles(t).map((f) => deleteFile(f.path).catch(() => {}))); await run(() => api.remove(t.id)) }} />
         ) : view === 'settings' ? (
           <Settings boards={allGroups} tasks={tasks} statuses={statuses} colorOf={colorOf} actions={actions} />
         ) : (<>
@@ -378,11 +393,11 @@ function Main() {
                               {!!(t.tags || []).length && <div className="chips">{t.tags.map((x) => <span key={x} className="chip" style={{ color: tagColor(x), background: tagColor(x) + '26' }}>{x}</span>)}</div>}
                               {t.notes && <p>{t.notes}</p>}
                               <div className="subs-wrap"><div className="subs" style={{ '--c': c }}>
-                                <div className="srow shead"><span>Subitem</span><span>Status</span><span>Owner</span><span>Date</span><span>Time</span><span>Notes</span><span /></div>
+                                <div className="srow shead"><span>Subitem</span><span>Status</span><span>Owner</span><span>Date</span><span>Time</span><span>Notes</span><span>Files</span></div>
                                 {subs(t).map((x) => {
                                   const tm = fmtTime(x.time)
                                   return (
-                                    <div key={x.id} className={`srow ${x.status === 'done' ? 'is-done' : ''}`}>
+                                    <div key={x.id} className={`srow ${x.status === 'done' ? 'is-done' : ''}`} onContextMenu={(e) => { e.preventDefault(); setSubMenu({ x: e.clientX, y: e.clientY, t, sid: x.id }) }}>
                                       <input className="inline" key={x.id + x.title} defaultValue={x.title} onBlur={(e) => e.target.value.trim() && e.target.value !== x.title && editSub(t, x.id, { title: e.target.value.trim() })} />
                                       <Pill list={STATUSES} value={x.status} onChange={(v) => editSub(t, x.id, { status: v })} />
                                       <div className="c-owner">
@@ -401,7 +416,12 @@ function Main() {
                                         <input type="time" value={x.time || ''} onClick={(e) => e.currentTarget.showPicker?.()} onChange={(e) => editSub(t, x.id, { time: e.target.value || null })} />
                                       </label>
                                       <input className="inline notes-in" key={x.id + (x.notes || '')} defaultValue={x.notes || ''} placeholder="" onBlur={(e) => e.target.value !== (x.notes || '') && editSub(t, x.id, { notes: e.target.value })} />
-                                      <button className="x" title="Delete subitem" onClick={() => delSub(t, x.id)}>✕</button>
+                                      <div className="c-files">
+                                        {filesEnabled && <label className={`fup ${upBusy[x.id] ? 'busy' : ''}`} title="Upload file">{upBusy[x.id] ? '…' : '+'}
+                                          <input type="file" multiple hidden onChange={(e) => { uploadSub(t, x, [...e.target.files]); e.target.value = '' }} /></label>}
+                                        {(x.attachments || []).length > 0 && <button className="fcount" onMouseEnter={(e) => openPop(t.id, e, false, x.id)} onMouseLeave={leavePop}
+                                          onClick={(e) => { e.stopPropagation(); openPop(t.id, e, true, x.id) }}>📎 {x.attachments.length}</button>}
+                                      </div>
                                     </div>
                                   )
                                 })}
@@ -441,7 +461,7 @@ function Main() {
         const duplicate = async () => {
           await run(() => Promise.all(chosen.map((t) => api.create({
             title: `${t.title} (copy)`, status: t.status, priority: t.priority, group_name: t.group_name || 'Main', due_date: t.due_date,
-            notes: t.notes || '', tags: t.tags || [], attachments: [], subtasks: (t.subtasks || []).map((x) => ({ ...x, id: crypto.randomUUID() })),
+            notes: t.notes || '', tags: t.tags || [], attachments: [], subtasks: (t.subtasks || []).map((x) => ({ ...x, id: crypto.randomUUID(), attachments: [] })),
             ...(t.section ? { section: t.section } : {}),
           }))))
           setSel({})
@@ -485,15 +505,21 @@ function Main() {
           onConfirm={async () => {
             setBulkBusy(true)
             await run(async () => {
-              await Promise.all(mine.flatMap((t) => (t.attachments || []).map((f) => deleteFile(f.path).catch(() => {}))))
+              await Promise.all(mine.flatMap((t) => allFiles(t).map((f) => deleteFile(f.path).catch(() => {}))))
               await Promise.all(mine.map((t) => api.remove(t.id)))
             })
             setSel({}); setBulkBusy(false); setConfirmBulk(false)
           }} />
       })()}
+      {subMenu && (
+        <div className="ctx" style={{ left: subMenu.x, top: subMenu.y }} onClick={(e) => e.stopPropagation()}>
+          <button onClick={() => { delSub(subMenu.t, subMenu.sid); setSubMenu(null) }}>🗑 Delete subitem</button>
+        </div>
+      )}
       {pop && (() => {
         const t = tasks.find((x) => x.id === pop.id)
-        return t && (t.attachments || []).length ? <FilePopover files={t.attachments} x={pop.x} y={pop.y} onPreview={(f) => { setPop(null); setPreview(f) }}
+        const list = !t ? [] : pop.sid ? ((t.subtasks || []).find((x) => x.id === pop.sid)?.attachments || []) : (t.attachments || [])
+        return t && list.length ? <FilePopover files={list} x={pop.x} y={pop.y} onPreview={(f) => { setPop(null); setPreview(f) }}
           onEnter={() => clearTimeout(popTimer.current)} onLeave={leavePop} /> : null
       })()}
       {preview && <FilePreview file={preview} onClose={() => setPreview(null)} />}
@@ -525,7 +551,7 @@ function Main() {
           onConfirm={async () => {
             setSecBusy(true)
             await run(async () => {
-              await Promise.all(mine.flatMap((t) => (t.attachments || []).map((f) => deleteFile(f.path).catch(() => {}))))
+              await Promise.all(mine.flatMap((t) => allFiles(t).map((f) => deleteFile(f.path).catch(() => {}))))
               await Promise.all(mine.map((t) => api.remove(t.id)))
             })
             saveSections(Object.keys(groups).filter((n) => n !== delSec).map((n) => ({ name: n, color: gColor(n) })))

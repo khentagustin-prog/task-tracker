@@ -43,7 +43,7 @@ export default function Drawer({ task, statuses, priorities, groups, onPatch, on
 
   const destroy = async () => {
     setDeleting(true)
-    await Promise.all((task.attachments || []).map((f) => deleteFile(f.path).catch(() => {})))
+    await Promise.all([...(task.attachments || []), ...(task.subtasks || []).flatMap((x) => x.attachments || [])].map((f) => deleteFile(f.path).catch(() => {})))
     onDelete(task.id)
   }
 

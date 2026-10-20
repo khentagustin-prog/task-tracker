@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { readSequencePdf } from './pdfRows.js'
 import ImageReview from './ImageReview.jsx'
-import { compute, formatGap, fmtTime12, msToDate, msToTime, dayMs, MIN } from './sequence.js'
+import { compute, formatGap, fmtTime12, msToDate, msToTime, dayMs, MIN, guessFlow } from './sequence.js'
 
 const niceDate = (iso) => new Date(iso + 'T00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 const CODE = /[A-Z]{2,6}-\d{4}[A-Z]{0,4}/
@@ -42,19 +42,28 @@ export default function Automation({ boards, casinos = [], onCreate, onOpenBoard
   const [err, setErr] = useState('')
 
   const first = act?.rows[0] || rem?.rows[0]
-  const load = async (file, kind) => {
-    if (!file) return
-    setErr(''); setDone(null); setBusy(kind)
+  // Isang upload lang: kahit isa o dalawang PDF, awtomatikong nakikilala kung Activation o Reminder (batay sa Label/pangalan ng unang row)
+  const loadMany = async (list) => {
+    const files = [...list].filter((f) => f && /pdf$/i.test(f.type || f.name))
+    if (!files.length) { setErr('PDF lang ang tinatanggap dito.'); return }
+    setErr(''); setDone(null); setBusy('x')
     try {
-      const d = await readSequencePdf(file)
-      d.name = file.name
-      kind === 'act' ? setAct(d) : setRem(d)
-      const base = kind === 'act' || !act ? d : act
-      const r0 = base.rows[0]
-      if (r0 && (kind === 'act' || !act)) { setDate(msToDate(r0.ms)); setFix('') }
-      if (!name && d.info.casino) setName(d.info.casino)
-      const code = d.rows.map((r) => r.title.match(CODE)?.[0]).find(Boolean)
-      if (code && !rep.from) setRep({ from: code, to: code })
+      let nA = act, nR = rem
+      const seen = []
+      for (const file of files) {
+        const d = await readSequencePdf(file); d.name = file.name
+        const r0 = d.rows[0]
+        const kind = r0 && guessFlow(r0) === 'Reminder' ? 'Reminder' : 'Activation'
+        seen.push(kind)
+        kind === 'Activation' ? (nA = d) : (nR = d)
+        if (!name && d.info.casino) setName(d.info.casino)
+        const code = d.rows.map((r) => r.title.match(CODE)?.[0]).find(Boolean)
+        if (code && !rep.from) setRep({ from: code, to: code })
+      }
+      setAct(nA); setRem(nR)
+      const base = nA || nR
+      if (base?.rows[0]) { setDate(msToDate(base.rows[0].ms)); setFix('') }
+      if (seen.length > 1 && new Set(seen).size < seen.length) setErr(`Parehong ${seen[0]} ang nakita sa mga PDF, kaya isa lang ang nagamit. Tiyaking isang Activation at isang Reminder ang ilalagay.`)
     } catch (e) { setErr('Hindi mabasa ang PDF: ' + (e.message || e)) } finally { setBusy('') }
   }
 
@@ -103,9 +112,13 @@ export default function Automation({ boards, casinos = [], onCreate, onOpenBoard
       </div>
       {mode === 'image' ? <ImageReview casinos={casinos} /> : (<>
 
+      <label className="au-one" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); loadMany(e.dataTransfer.files) }}>
+        {busy ? 'Binabasa ang PDF...' : <><b>Isang upload lang</b><span>I-drop o piliin ang Activation at Reminder PDF (isa o dalawa). Awtomatiko itong hahatiin.</span></>}
+        <input type="file" accept="application/pdf" multiple hidden onChange={(e) => { loadMany(e.target.files); e.target.value = '' }} />
+      </label>
       <div className="au-grid">
-        <Drop title="Activation PDF" hint="Workflow Gap PDF ng Activation" doc={act} busy={busy === 'act'} onFile={(f) => load(f, 'act')} onClear={() => { setAct(null); setDone(null) }} />
-        <Drop title="Reminder PDF" hint="Workflow Gap PDF ng Reminder" doc={rem} busy={busy === 'rem'} onFile={(f) => load(f, 'rem')} onClear={() => { setRem(null); setDone(null) }} />
+        <Drop title="Activation" hint="Naghihintay ng Activation PDF" doc={act} busy={false} onFile={(f) => loadMany([f])} onClear={() => { setAct(null); setDone(null) }} />
+        <Drop title="Reminder" hint="Naghihintay ng Reminder PDF" doc={rem} busy={false} onFile={(f) => loadMany([f])} onClear={() => { setRem(null); setDone(null) }} />
       </div>
       {err && <div className="error">⚠ {err}</div>}
 

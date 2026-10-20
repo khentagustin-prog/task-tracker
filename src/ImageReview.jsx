@@ -51,10 +51,11 @@ export default function ImageReview({ casinos = [] }) {
     if (!/^image\//.test(f.type)) { setErr('Larawan lang (PNG o JPG) ang tinatanggap dito.'); return }
     setErr(''); setSteps(null); setConfirmed(false)
     setFile(f); setUrl((u) => { if (u) URL.revokeObjectURL(u); return URL.createObjectURL(f) })
+    read(f) // awtomatiko: pagka-upload, binabasa na agad
   }
-  const read = async () => {
+  const read = async (f = file) => {
     setBusy(true); setErr(''); setConfirmed(false)
-    try { const st = toSteps(await extractRows(file), Number(year)); setSteps(st); if (casino) fillFor(casino, st) } catch (e) { setErr(e.message) } finally { setBusy(false) }
+    try { const st = toSteps(await extractRows(f), Number(year)); setSteps(st); if (casino) fillFor(casino, st) } catch (e) { setErr(e.message) } finally { setBusy(false) }
   }
   const upd = (id, p) => setSteps((s) => s.map((x) => (x.id === id ? { ...x, ...p, uncertain: p.title === undefined && p.label === undefined && p.date === undefined && p.time === undefined ? x.uncertain : false } : x)))
 
@@ -78,6 +79,7 @@ export default function ImageReview({ casinos = [] }) {
     })
     doc.save(`${(meta.casino || 'sequence').replace(/\s+/g, '-')}-${flow === 'Activation' ? 'Act' : 'Rem'}.pdf`)
   }
+  const downloadBoth = () => { download('Activation'); setTimeout(() => download('Reminder'), 500) }
   const nAct = calc?.withMs.filter((s) => s.flow === 'Activation').length || 0, nRem = calc?.withMs.filter((s) => s.flow === 'Reminder').length || 0
 
   return (
@@ -94,13 +96,14 @@ export default function ImageReview({ casinos = [] }) {
             <div className="au-info"><div className="au-file">🖼 {file.name}</div>
               <label className="au-year">Taon ng petsa<input type="number" value={year} onChange={(e) => setYear(e.target.value)} /></label>
               <small className="muted">Walang taon sa larawan, kaya ilagay ang tamang taon.</small>
-              <button className="primary" disabled={busy} onClick={read}>{busy ? 'Binabasa ng AI...' : steps ? 'Basahin ulit' : 'Basahin at kompyutin'}</button>
+              {busy && <div className="muted">Binabasa ng AI ang larawan...</div>}
+              {!busy && (steps || err) && <button className="ghost" onClick={() => read()}>Basahin ulit</button>}
             </div>
           )}
         </div>
         <div className="au-drop">
           <div className="au-drop-h"><b>Paano ito gumagana</b></div>
-          <ol className="au-how"><li>Babasahin ng AI ang larawan.</li><li>Kokompyutin ang Gap ng bawat step.</li><li><b>Susuriin mo</b> ang resulta katabi ng larawan.</li><li>Pagkatapos mong kumpirmahin, gagawa ng PDF.</li></ol>
+          <ol className="au-how"><li>I-upload ang <b>isang larawan</b> lang.</li><li>Awtomatiko itong babasahin, kokompyutin ang Gap, at hahatiin sa <b>Activation</b> at <b>Reminder</b>.</li><li><b>Susuriin mo</b> ang resulta katabi ng larawan.</li><li>Pagkatapos mong kumpirmahin, gagawa ng dalawang PDF.</li></ol>
         </div>
       </div>
       {err && <div className="error">⚠ {err}</div>}
@@ -169,8 +172,9 @@ export default function ImageReview({ casinos = [] }) {
           <section className="d-card">
             <label className="rv-confirm"><input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} /> Nasuri ko na ang bawat row laban sa larawan, at tama ang mga pangalan, petsa at oras.</label>
             <div className="au-act">
-              <button className="primary" disabled={blocked || !nAct} onClick={() => download('Activation')}>⬇ Activation PDF</button>
-              <button className="primary" disabled={blocked || !nRem} onClick={() => download('Reminder')}>⬇ Reminder PDF</button>
+              <button className="primary" disabled={blocked || !nAct || !nRem} onClick={downloadBoth}>⬇ Download pareho (Activation + Reminder)</button>
+              <button className="ghost" disabled={blocked || !nAct} onClick={() => download('Activation')}>Activation lang</button>
+              <button className="ghost" disabled={blocked || !nRem} onClick={() => download('Reminder')}>Reminder lang</button>
               {!confirmed && !calc.errors.length && <span className="muted">Lagyan muna ng tsek sa itaas.</span>}
               {calc.errors.length > 0 && <span className="muted">Ayusin muna ang mga ⛔.</span>}
             </div>

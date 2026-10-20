@@ -1,8 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
 
 // The publishable key is meant to be public. Access is protected by the login + row level security in Supabase.
-export const projectUrl = import.meta.env.VITE_SUPABASE_URL
-export const anonKey = import.meta.env.VITE_SUPABASE_KEY
+// Defaults are the project URL and the publishable key. Both are public by design (every visitor's browser gets them);
+// they let a deployment work even if the environment variables are not set. Override them with VITE_SUPABASE_URL / VITE_SUPABASE_KEY.
+export const projectUrl = import.meta.env.VITE_SUPABASE_URL || 'https://qawcwmmucpxzsfjygmif.supabase.co'
+export const anonKey = import.meta.env.VITE_SUPABASE_KEY || 'sb_publishable_uBIaLF-nHVGlq0FhW5Kdug_yHfMLnQj'
 export const configured = Boolean(projectUrl && anonKey)
 
 export const supabase = configured

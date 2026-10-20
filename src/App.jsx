@@ -355,7 +355,7 @@ function Main() {
                       <span style={{ gridColumn: '2 / 4' }}>Task</span><span>Due date</span><span>Status</span><span>Notes</span><span>Files</span></div>
                     {items.map((t) => {
                       const nFiles = (t.attachments || []).length
-                      const nUpd = nFiles + (t.notes ? 1 : 0)
+                      const nUpd = (t.updates || []).length
                       const late = t.due_date && t.due_date < today() && t.status !== 'done'
                       const isOpen = expanded[t.id] ?? new URLSearchParams(location.search).has('expand')
                       return (

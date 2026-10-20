@@ -6,6 +6,7 @@ import ConfirmModal from './ConfirmModal.jsx'
 import DuplicateModal from './DuplicateModal.jsx'
 import { shiftDate } from './dates.js'
 import AuthGate from './AuthGate.jsx'
+import { emailToUsername } from './supabase.js'
 import Automation from './Automation.jsx'
 import Archive from './Archive.jsx'
 import Dashboard from './Dashboard.jsx'
@@ -303,7 +304,7 @@ function Main({ user, signOut }) {
         </nav>
         <button className="settings-btn theme" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☀ Light mode' : '☾ Dark mode'}</button>
         <button className={`settings-btn ${view === 'settings' ? 'on' : ''}`} onClick={() => setView('settings')}>⚙ Settings</button>
-        <div className="who" title={user.email}><span>● {user.email}</span><button onClick={signOut}>Sign out</button></div>
+        <div className="who" title={user.email}><span>● {emailToUsername(user.email)}</span><button onClick={signOut}>Sign out</button></div>
       </aside>
 
       <main>

@@ -1,7 +1,8 @@
-// Builds the n8n workflow "Task Tracker - Extract (Google login)" (POST /webhook/extract-auth): Groq's vision model reads a sequence image.
-// Only signed-in Google users with a company email may call it: n8n asks Supabase who owns the bearer token.
+// Builds the n8n workflow "Task Tracker - Extract (login)" (POST /webhook/extract-auth): Groq's vision model reads a sequence image.
+// Only signed-in, allowed users may call it: n8n asks Supabase (rpc whoami) who owns the bearer token and whether
+// that account is on the allowed_users list.
 // Usage: SUPABASE_URL=... SUPABASE_ANON_KEY=... LLM_CRED_ID=<Header Auth credential with the Groq key> \
-//        [ALLOWED_DOMAIN=247ga.co] node n8n/build-extract-workflow.mjs [outfile]
+//        node n8n/build-extract-workflow.mjs [outfile]
 import { writeFileSync } from 'node:fs'
 
 export const PROMPT = `This image is a screenshot of a project-board subitem table. Transcribe EVERY row, top to bottom, exactly as it is shown.
@@ -93,15 +94,14 @@ if (A.error) return [{ json: { error: 'The AI could not read the image. ' + A.er
 return [{ json: { rows: A.rows, warnings: [] } }]`
 
 
-// Code node: checks the Supabase answer for the bearer token
-export const checkUserCode = (domain) => `const u = $input.first().json
+// Code node: checks the Supabase answer (rpc whoami) for the bearer token
+export const CHECK_USER_CODE = `const u = $input.first().json
 const built = $('Build Request').first().json
-const email = String(u.email || '').toLowerCase()
-if (!email || u.error || u.code || u.msg) return [{ json: { status: 401, error: 'Your session is not valid. Sign out and sign in again.' } }]
-if (!email.endsWith('@${domain}')) return [{ json: { status: 403, error: 'This account is not allowed.' } }]
+if (!u || u.error || u.code || u.message || u.msg) return [{ json: { status: 401, error: 'Your session is not valid. Sign out and sign in again.' } }]
+if (u.ok !== true) return [{ json: { status: 403, error: 'This account is not allowed.' } }]
 return [{ json: built }]`
 
-export function build({ supabaseUrl = 'https://YOUR_PROJECT.supabase.co', anonKey = 'YOUR_SUPABASE_ANON_KEY', llmCredId = 'REPLACE_ME', domain = '247ga.co' } = {}) {
+export function build({ supabaseUrl = 'https://YOUR_PROJECT.supabase.co', anonKey = 'YOUR_SUPABASE_ANON_KEY', llmCredId = 'REPLACE_ME' } = {}) {
   const llm = { httpHeaderAuth: { id: llmCredId, name: 'grock' } }
   const node = (id, name, type, typeVersion, x, y, parameters, extra = {}) => ({ id, name, type, typeVersion, position: [x, y], parameters, ...extra })
   const ifNode = (id, name, x, y, left, operation, ctype = 'string') => node(id, name, 'n8n-nodes-base.if', 2.2, x, y,
@@ -116,10 +116,11 @@ export function build({ supabaseUrl = 'https://YOUR_PROJECT.supabase.co', anonKe
     node('extract-hook', 'Extract Hook', 'n8n-nodes-base.webhook', 2, 0, 0, { httpMethod: 'POST', path: 'extract-auth', authentication: 'none', responseMode: 'responseNode', options: { allowedOrigins: '*' } }, { webhookId: 'extract-auth-post' }),
     node('build-request', 'Build Request', 'n8n-nodes-base.code', 2, 260, 0, { jsCode: GROQ_BUILD_CODE }),
     node('verify-user', 'Verify user (Supabase)', 'n8n-nodes-base.httpRequest', 4.2, 520, 0, {
-      method: 'GET', url: supabaseUrl.replace(/\/$/, '') + '/auth/v1/user', sendHeaders: true,
-      headerParameters: { parameters: [{ name: 'apikey', value: anonKey }, { name: 'Authorization', value: "={{ $('Extract Hook').first().json.headers.authorization || '' }}" }] },
-      options: { timeout: 20000 } }, { onError: 'continueRegularOutput', notes: 'Asks Supabase who the bearer token belongs to. An invalid or expired token returns an error.' }),
-    node('check-user', 'Check user', 'n8n-nodes-base.code', 2, 780, 0, { jsCode: checkUserCode(domain) }),
+      method: 'POST', url: supabaseUrl.replace(/\/$/, '') + '/rest/v1/rpc/whoami', sendHeaders: true,
+      headerParameters: { parameters: [{ name: 'apikey', value: anonKey }, { name: 'Authorization', value: "={{ $('Extract Hook').first().json.headers.authorization || '' }}" }, { name: 'content-type', value: 'application/json' }] },
+      sendBody: true, specifyBody: 'json', jsonBody: '{}', options: { timeout: 20000 } },
+      { onError: 'continueRegularOutput', notes: 'Calls the database function whoami() with the caller\'s token. An invalid or expired token returns an error; a valid one says whether the account is allowed.' }),
+    node('check-user', 'Check user', 'n8n-nodes-base.code', 2, 780, 0, { jsCode: CHECK_USER_CODE }),
     ifNode('has-body', 'Has Image?', 1040, 0, '={{ $json.error }}', 'empty'),
     groq('groq-1', 'Groq read', 1300),
     ifNode('failed', 'Read failed?', 1560, -80, '={{ $json.error }}', 'notEmpty'),
@@ -141,12 +142,12 @@ export function build({ supabaseUrl = 'https://YOUR_PROJECT.supabase.co', anonKe
     'Groq read (retry)': to('Validate Answer'),
     'Validate Answer': to('Respond'),
   }
-  return { name: 'Task Tracker - Extract (Google login)', nodes, connections, settings: {} }
+  return { name: 'Task Tracker - Extract (login)', nodes, connections, settings: {} }
 }
 
 if (process.argv[1] && process.argv[1].endsWith('build-extract-workflow.mjs')) {
   const out = process.argv[2] || new URL('./extract-workflow.json', import.meta.url)
-  const wf = build({ supabaseUrl: process.env.SUPABASE_URL, anonKey: process.env.SUPABASE_ANON_KEY, llmCredId: process.env.LLM_CRED_ID, domain: process.env.ALLOWED_DOMAIN || '247ga.co' })
+  const wf = build({ supabaseUrl: process.env.SUPABASE_URL, anonKey: process.env.SUPABASE_ANON_KEY, llmCredId: process.env.LLM_CRED_ID })
   writeFileSync(out, JSON.stringify(wf, null, 2))
   console.log('wrote extract workflow')
 }

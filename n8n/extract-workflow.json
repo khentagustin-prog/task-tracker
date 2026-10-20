@@ -1,5 +1,5 @@
 {
-  "name": "Task Tracker - Extract (Google login)",
+  "name": "Task Tracker - Extract (login)",
   "nodes": [
     {
       "id": "extract-hook",
@@ -44,8 +44,8 @@
         0
       ],
       "parameters": {
-        "method": "GET",
-        "url": "https://YOUR_PROJECT.supabase.co/auth/v1/user",
+        "method": "POST",
+        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/rpc/whoami",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -56,15 +56,22 @@
             {
               "name": "Authorization",
               "value": "={{ $('Extract Hook').first().json.headers.authorization || '' }}"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
             }
           ]
         },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{}",
         "options": {
           "timeout": 20000
         }
       },
       "onError": "continueRegularOutput",
-      "notes": "Asks Supabase who the bearer token belongs to. An invalid or expired token returns an error."
+      "notes": "Calls the database function whoami() with the caller's token. An invalid or expired token returns an error; a valid one says whether the account is allowed."
     },
     {
       "id": "check-user",
@@ -76,7 +83,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const u = $input.first().json\nconst built = $('Build Request').first().json\nconst email = String(u.email || '').toLowerCase()\nif (!email || u.error || u.code || u.msg) return [{ json: { status: 401, error: 'Your session is not valid. Sign out and sign in again.' } }]\nif (!email.endsWith('@247ga.co')) return [{ json: { status: 403, error: 'This account is not allowed.' } }]\nreturn [{ json: built }]"
+        "jsCode": "const u = $input.first().json\nconst built = $('Build Request').first().json\nif (!u || u.error || u.code || u.message || u.msg) return [{ json: { status: 401, error: 'Your session is not valid. Sign out and sign in again.' } }]\nif (u.ok !== true) return [{ json: { status: 403, error: 'This account is not allowed.' } }]\nreturn [{ json: built }]"
       }
     },
     {

@@ -764,3 +764,8 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .who span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #12b76a }
 .who button { all: unset; cursor: pointer; font-size: 12px; color: var(--muted); text-decoration: underline } .who button:hover { color: var(--text) }
 aside button.settings-btn.theme { margin-top: auto } aside .who { margin-top: 0 }
+
+.login-form { display: flex; flex-direction: column; gap: 10px; text-align: left }
+.login-form > input { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface2); color: var(--text); font: inherit; outline: none }
+.login-form > input:focus { border-color: var(--blue) }
+.login-form .primary { padding: 10px; margin-top: 2px } .login-form .primary:disabled { opacity: .5; cursor: not-allowed }

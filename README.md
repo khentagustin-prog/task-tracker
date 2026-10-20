@@ -24,10 +24,10 @@ The login page asks for a username and a password. The go-live script creates th
 - In **Vercel** add `VITE_SUPABASE_KEY` (the publishable key; Production and Preview). `VITE_SUPABASE_URL` and
   `VITE_N8N_BASE_URL` must also be set. Redeploy after changing variables.
 
-**Go live** (do it when nobody is working): merge the `google-login` branch to `main` and wait for Vercel to deploy, then run
-`supabase-v8-go-live.sql` in the SQL Editor. It runs in one transaction (all or nothing): it creates the accounts, makes data
-private per account, gives all existing data to `admin1`, and removes the old open access. Afterwards deactivate the old n8n
-workflows "Task Tracker API" and "Task Tracker - Extract (image to rows)".
+**Go live (done on 2026-10-21)**: the login version was merged to `main` and `supabase-v8-go-live.sql` was run once in the SQL Editor.
+It runs in one transaction (all or nothing): it creates the accounts, makes data private per account, gives all existing data to
+`admin1`, and removes the old open access. The old n8n workflows "Task Tracker API" and "Task Tracker - Extract (image to rows)"
+are switched off.
 
 ### 3. n8n (only needed for reading images with AI)
 1. Build the workflow (credentials stay out of git):

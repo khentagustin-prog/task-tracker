@@ -756,3 +756,11 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 .au-verify { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; margin: 6px 0; cursor: pointer } .au-verify input { margin-top: 2px } .au-verify small { color: var(--muted) }
 
 .rv-verify { font-size: 12.5px; padding: 8px 12px; border: 1px dashed #f7900966; border-radius: 8px; color: #f79009; margin: 6px 0 } .rv-verify b { color: var(--text) }
+
+/* Google sign-in + signed-in user */
+.g-btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 10px; padding: 10px 16px; font: inherit; font-weight: 500; cursor: pointer; margin: 6px 0 }
+.g-btn:hover { background: var(--hover) } .g-btn:disabled { opacity: .6; cursor: wait }
+.who { margin-top: auto; padding: 8px 8px 4px; font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 4px }
+.who span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #12b76a }
+.who button { all: unset; cursor: pointer; font-size: 12px; color: var(--muted); text-decoration: underline } .who button:hover { color: var(--text) }
+aside button.settings-btn.theme { margin-top: auto } aside .who { margin-top: 0 }

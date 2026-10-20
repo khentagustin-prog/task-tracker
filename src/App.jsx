@@ -5,8 +5,7 @@ import TaskModal from './TaskModal.jsx'
 import ConfirmModal from './ConfirmModal.jsx'
 import DuplicateModal from './DuplicateModal.jsx'
 import { shiftDate } from './dates.js'
-import AccessGate from './AccessGate.jsx'
-import { setKey, clearKey } from './auth.js'
+import AuthGate from './AuthGate.jsx'
 import Automation from './Automation.jsx'
 import Archive from './Archive.jsx'
 import Dashboard from './Dashboard.jsx'
@@ -56,7 +55,7 @@ function Stat({ label, value, color }) {
   )
 }
 
-function Main() {
+function Main({ user, signOut }) {
   const [allTasks, setTasks] = useState([])
   const tasks = useMemo(() => allTasks.filter((t) => !t.archived), [allTasks])
   const archived = useMemo(() => allTasks.filter((t) => t.archived), [allTasks])
@@ -304,7 +303,7 @@ function Main() {
         </nav>
         <button className="settings-btn theme" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☀ Light mode' : '☾ Dark mode'}</button>
         <button className={`settings-btn ${view === 'settings' ? 'on' : ''}`} onClick={() => setView('settings')}>⚙ Settings</button>
-        <div className="mode">● {api.mode === 'n8n' ? 'Synced via n8n' : 'Local only'}</div>
+        <div className="who" title={user.email}><span>● {user.email}</span><button onClick={signOut}>Sign out</button></div>
       </aside>
 
       <main>
@@ -578,14 +577,5 @@ function Main() {
 }
 
 export default function App() {
-  const [locked, setLocked] = useState(() => api.mode === 'n8n' && !api.hasKey())
-  const [msg, setMsg] = useState('')
-  const [round, setRound] = useState(0)
-  useEffect(() => {
-    const h = () => { clearKey(); setMsg('Wrong access key. Please try again.'); setLocked(true) }
-    window.addEventListener('auth-failed', h)
-    return () => window.removeEventListener('auth-failed', h)
-  }, [])
-  if (locked) return <AccessGate message={msg} onSubmit={(k) => { setKey(k); setMsg(''); setLocked(false); setRound((r) => r + 1) }} />
-  return <Main key={round} />
+  return <AuthGate>{(user, signOut) => <Main key={user.id} user={user} signOut={signOut} />}</AuthGate>
 }

@@ -130,7 +130,7 @@ export default function Drawer({ task, statuses, priorities, groups, onPatch, on
           {files.map((f) => (
             <li key={f.path}>
               <span>📄</span>
-              <a href={f.url} target="_blank" rel="noreferrer" onClick={(e) => { if (onPreview) { e.preventDefault(); onPreview(f) } }}>{f.name}</a>
+              <a href="#" onClick={(e) => { e.preventDefault(); onPreview && onPreview(f) }}>{f.name}</a>
               <em>{fmt(f.size)}</em>
               <button className="x" onClick={() => removeFile(f)}>✕</button>
             </li>

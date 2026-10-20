@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { fileLinks } from './files.js'
 
 export const fileKind = (name = '') => {
   const e = name.split('.').pop().toLowerCase()
@@ -12,7 +13,6 @@ export const fileKind = (name = '') => {
 }
 const ICON = { docx: '📘', pdf: '📕', image: '🖼', video: '🎞', audio: '🎵', text: '📝', other: '📄' }
 const fmt = (n) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round((n || 0) / 1024))} KB`)
-const dl = (f) => `${f.url}?download=${encodeURIComponent(f.name)}`
 
 // Appears when you hover or click 📎. Fixed position so the table does not clip it.
 export function FilePopover({ files, x, y, onPreview, onEnter, onLeave }) {
@@ -51,6 +51,14 @@ function DocxView({ url }) {
 
 export function FilePreview({ file, onClose }) {
   const kind = fileKind(file.name)
+  const [links, setLinks] = useState(null) // { url, download } - short-lived signed links (the bucket is private)
+  const [linkErr, setLinkErr] = useState('')
+  useEffect(() => {
+    let live = true
+    fileLinks(file).then((l) => live && setLinks(l)).catch((e) => live && setLinkErr(e.message || 'Could not open the file.'))
+    return () => { live = false }
+  }, [file.path])
+  const url = links?.url
   useEffect(() => {
     const k = (e) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', k)
@@ -63,22 +71,24 @@ export function FilePreview({ file, onClose }) {
         <div className="fprev-head">
           <span className="fi">{ICON[kind]}</span>
           <b title={file.name}>{file.name}</b>
-          <a href={file.url} target="_blank" rel="noreferrer">Open ↗</a>
-          <a href={dl(file)}>Download ⬇</a>
+          {url && <a href={url} target="_blank" rel="noreferrer">Open ↗</a>}
+          {links && <a href={links.download}>Download ⬇</a>}
           <button className="x" onClick={onClose}>✕</button>
         </div>
         <div className="fprev-body">
-          {kind === 'docx' && <DocxView url={file.url} />}
-          {kind === 'pdf' && <iframe title={file.name} src={file.url} />}
-          {kind === 'text' && <iframe title={file.name} src={file.url} className="light" />}
-          {kind === 'image' && <img src={file.url} alt={file.name} />}
-          {kind === 'video' && <video src={file.url} controls autoPlay />}
-          {kind === 'audio' && <audio src={file.url} controls autoPlay />}
-          {kind === 'other' && (
+          {!url && !linkErr && <div className="fprev-other">Loading...</div>}
+          {linkErr && <div className="fprev-other">{linkErr}</div>}
+          {url && kind === 'docx' && <DocxView url={url} />}
+          {url && kind === 'pdf' && <iframe title={file.name} src={url} />}
+          {url && kind === 'text' && <iframe title={file.name} src={url} className="light" />}
+          {url && kind === 'image' && <img src={url} alt={file.name} />}
+          {url && kind === 'video' && <video src={url} controls autoPlay />}
+          {url && kind === 'audio' && <audio src={url} controls autoPlay />}
+          {url && kind === 'other' && (
             <div className="fprev-other">
               <div style={{ fontSize: 44 }}>{ICON.other}</div>
               <p>This kind of file cannot be previewed in the app.</p>
-              <a className="primary" href={dl(file)}>Download</a>
+              <a className="primary" href={links.download}>Download</a>
             </div>
           )}
         </div>

@@ -1,5 +1,5 @@
 {
-  "name": "Task Tracker - Extract (image to rows)",
+  "name": "Task Tracker - Extract (Google login)",
   "nodes": [
     {
       "id": "extract-hook",
@@ -10,22 +10,16 @@
         0,
         0
       ],
-      "webhookId": "extract-post",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "REPLACE_ME",
-          "name": "Task Tracker API key"
-        }
-      },
       "parameters": {
         "httpMethod": "POST",
-        "path": "extract",
-        "authentication": "headerAuth",
+        "path": "extract-auth",
+        "authentication": "none",
         "responseMode": "responseNode",
         "options": {
           "allowedOrigins": "*"
         }
-      }
+      },
+      "webhookId": "extract-auth-post"
     },
     {
       "id": "build-request",
@@ -41,12 +35,57 @@
       }
     },
     {
+      "id": "verify-user",
+      "name": "Verify user (Supabase)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://YOUR_PROJECT.supabase.co/auth/v1/user",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ $('Extract Hook').first().json.headers.authorization || '' }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Asks Supabase who the bearer token belongs to. An invalid or expired token returns an error."
+    },
+    {
+      "id": "check-user",
+      "name": "Check user",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const u = $input.first().json\nconst built = $('Build Request').first().json\nconst email = String(u.email || '').toLowerCase()\nif (!email || u.error || u.code || u.msg) return [{ json: { status: 401, error: 'Your session is not valid. Sign out and sign in again.' } }]\nif (!email.endsWith('@247ga.co')) return [{ json: { status: 403, error: 'This account is not allowed.' } }]\nreturn [{ json: built }]"
+      }
+    },
+    {
       "id": "has-body",
       "name": "Has Image?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        520,
+        1040,
         0
       ],
       "parameters": {
@@ -59,7 +98,7 @@
           "combinator": "and",
           "conditions": [
             {
-              "id": "c1",
+              "id": "has-body-c",
               "leftValue": "={{ $json.error }}",
               "rightValue": "",
               "operator": {
@@ -78,16 +117,9 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        780,
+        1300,
         -80
       ],
-      "onError": "continueRegularOutput",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "REPLACE_ME",
-          "name": "grock"
-        }
-      },
       "parameters": {
         "method": "POST",
         "url": "https://api.groq.com/openai/v1/chat/completions",
@@ -109,6 +141,13 @@
           "timeout": 120000
         }
       },
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_ME",
+          "name": "grock"
+        }
+      },
       "notes": "Uses the existing Header Auth credential \"grock\" (Authorization: Bearer <Groq key>)."
     },
     {
@@ -117,7 +156,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1040,
+        1560,
         -80
       ],
       "parameters": {
@@ -130,7 +169,7 @@
           "combinator": "and",
           "conditions": [
             {
-              "id": "c3",
+              "id": "failed-c",
               "leftValue": "={{ $json.error }}",
               "rightValue": "",
               "operator": {
@@ -149,14 +188,14 @@
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [
-        1300,
+        1820,
         -160
       ],
-      "webhookId": "extract-pause",
       "parameters": {
         "amount": 30,
         "unit": "seconds"
       },
+      "webhookId": "extract-pause",
       "notes": "If Groq rate-limits the call (limit per minute), wait 30 seconds and retry once."
     },
     {
@@ -165,16 +204,9 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1560,
+        2080,
         -80
       ],
-      "onError": "continueRegularOutput",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "REPLACE_ME",
-          "name": "grock"
-        }
-      },
       "parameters": {
         "method": "POST",
         "url": "https://api.groq.com/openai/v1/chat/completions",
@@ -196,6 +228,13 @@
           "timeout": 120000
         }
       },
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_ME",
+          "name": "grock"
+        }
+      },
       "notes": "Uses the existing Header Auth credential \"grock\" (Authorization: Bearer <Groq key>)."
     },
     {
@@ -204,7 +243,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1820,
+        2340,
         -80
       ],
       "parameters": {
@@ -217,14 +256,14 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        2080,
+        2600,
         0
       ],
       "parameters": {
         "respondWith": "json",
         "responseBody": "={{ $json }}",
         "options": {
-          "responseCode": "={{ $json.error ? 422 : 200 }}",
+          "responseCode": "={{ $json.status || ($json.error ? 422 : 200) }}",
           "responseHeaders": {
             "entries": [
               {
@@ -250,6 +289,28 @@
       ]
     },
     "Build Request": {
+      "main": [
+        [
+          {
+            "node": "Verify user (Supabase)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify user (Supabase)": {
+      "main": [
+        [
+          {
+            "node": "Check user",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check user": {
       "main": [
         [
           {

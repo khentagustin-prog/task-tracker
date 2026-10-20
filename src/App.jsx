@@ -124,7 +124,7 @@ function Main() {
   })
   useEffect(() => { try { localStorage.setItem('statuses-v1', JSON.stringify(statuses)) } catch {} }, [statuses])
   const STATUSES = statuses
-  // Settings: naka-save sa Supabase (via n8n); localStorage ang mabilis na cache.
+  // Settings: saved in Supabase (via n8n); localStorage is the fast cache.
   const [settingsReady, setSettingsReady] = useState(false)
   useEffect(() => {
     api.getSettings().then((cfg) => {
@@ -154,19 +154,19 @@ function Main() {
   const run = async (fn) => { try { setError(''); await fn(); await refresh() } catch (e) { setError(e.message) } }
   const createTask = async (task) => {
     const sec = board === 'all' ? null : (addSection ?? Object.keys(groups)[0] ?? null)
-    const payload = sec && sec !== board ? { ...task, section: sec } : task // walang section = default group
+    const payload = sec && sec !== board ? { ...task, section: sec } : task // no section = default group
     await run(() => api.create(payload))
     setShowAdd(false); setStatus('todo'); setAddGroup(null); setAddSection(null)
   }
   const PR = { critical: 0, high: 1, medium: 2, low: 3 }
   const sorter = (a, b) => sort === 'due' ? (a.due_date || '9999').localeCompare(b.due_date || '9999') : sort === 'priority' ? PR[a.priority] - PR[b.priority] : (a.created_at || '').localeCompare(b.created_at || '')
-  // Laging nasa pinakabagong kopya ang edit, at sunud-sunod ang pag-save para walang nabubura.
+  // Edits always apply to the latest copy and saves run in order so nothing gets overwritten.
   const patch = (id, p) => {
     setT(tasksRef.current.map((t) => (t.id === id ? { ...t, ...p } : t)))
     pending.current++
     queue.current = queue.current
       .then(() => api.update(id, p))
-      .catch((e) => setError(`Hindi na-save: ${e.message}`))
+      .catch((e) => setError(`Could not save: ${e.message}`))
       .finally(() => { pending.current--; if (pending.current === 0) refresh() })
   }
 
@@ -263,7 +263,7 @@ function Main() {
   const renameSection = (old, name) => {
     name = name.trim()
     if (!name || name === old) return
-    if (name in groups) { setError(`May group na "${name}".`); return }
+    if (name in groups) { setError(`A group named "${name}" already exists.`); return }
     tasks.filter((t) => (t.group_name || 'Main') === board && (t.section || board) === old).forEach((t) => patch(t.id, { section: name }))
     saveSections(currentList({ rename: [old, name] }))
   }
@@ -336,7 +336,7 @@ function Main() {
         {error && <div className="error">⚠ {error}</div>}
 
         {loading ? <div className="empty">Loading...</div> : view === 'table' ? (
-          (board === 'all' && !visible.length) ? <div className="empty">Wala pang tasks. Gamitin ang “+ Add task” sa table.</div> :
+          (board === 'all' && !visible.length) ? <div className="empty">No tasks yet. Use “+ Add task” in the table.</div> :
           <>{Object.entries(groups).map(([g, items], i) => {
             const c = gColor(g)
             const open = !collapsed[g]
@@ -383,7 +383,7 @@ function Main() {
                             </label>
                             <Pill list={STATUSES} value={t.status} onChange={(v) => patch(t.id, { status: v })} />
                             {(t.notes || '').includes('\n')
-                              ? <button className="inline cell-notes multi" title="May maraming linya ang notes. I-click para buksan." onClick={() => setOpenId(t.id)}>{(t.notes || '').split('\n').find((l) => l.trim()) || ''}<em>…</em></button>
+                              ? <button className="inline cell-notes multi" title="These notes have several lines. Click to open." onClick={() => setOpenId(t.id)}>{(t.notes || '').split('\n').find((l) => l.trim()) || ''}<em>…</em></button>
                               : <input className="inline cell-notes" key={t.id + (t.notes || '').length} defaultValue={t.notes || ''} placeholder="Add notes"
                                   onChange={(e) => { e.target.dataset.dirty = '1' }}
                                   onBlur={(e) => e.target.dataset.dirty && e.target.value !== (t.notes || '') && patch(t.id, { notes: e.target.value })}
@@ -507,7 +507,7 @@ function Main() {
       })()}
       {confirmBulk && (() => {
         const ids = Object.keys(sel).filter((k) => sel[k]); const mine = tasks.filter((t) => ids.includes(t.id))
-        return <ConfirmModal busy={bulkBusy} title={`Delete ${mine.length} task${mine.length === 1 ? '' : 's'}?`} message="Hindi na ito maibabalik pagkatapos."
+        return <ConfirmModal busy={bulkBusy} title={`Delete ${mine.length} task${mine.length === 1 ? '' : 's'}?`} message="This cannot be undone."
           detail={<>{mine.slice(0, 4).map((t) => <b key={t.id}>{t.title}</b>)}{mine.length > 4 && <span>+{mine.length - 4} more</span>}</>}
           onClose={() => !bulkBusy && setConfirmBulk(false)}
           onConfirm={async () => {
@@ -553,7 +553,7 @@ function Main() {
       })()}
       {delSec && (() => {
         const mine = tasks.filter((t) => (t.group_name || 'Main') === board && (t.section || board) === delSec)
-        return <ConfirmModal busy={secBusy} title="Delete this group?" message={mine.length ? 'Mabubura ang group at lahat ng task nito. Hindi na ito maibabalik.' : 'Walang task sa group na ito.'}
+        return <ConfirmModal busy={secBusy} title="Delete this group?" message={mine.length ? 'The group and all its tasks will be deleted. This cannot be undone.' : 'This group has no tasks.'}
           detail={<><b>{delSec}</b>{mine.length > 0 && <span>{mine.length} task{mine.length > 1 ? 's' : ''} will be deleted</span>}</>}
           onClose={() => !secBusy && setDelSec(null)}
           onConfirm={async () => {
@@ -582,7 +582,7 @@ export default function App() {
   const [msg, setMsg] = useState('')
   const [round, setRound] = useState(0)
   useEffect(() => {
-    const h = () => { clearKey(); setMsg('Mali ang access key. Subukan ulit.'); setLocked(true) }
+    const h = () => { clearKey(); setMsg('Wrong access key. Please try again.'); setLocked(true) }
     window.addEventListener('auth-failed', h)
     return () => window.removeEventListener('auth-failed', h)
   }, [])

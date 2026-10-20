@@ -1,4 +1,4 @@
-// Sinusubaybayan ang mga nakabinbing network request para sa top loading bar.
+// Tracks pending network requests for the top loading bar.
 let pending = 0
 const subs = new Set()
 const emit = () => subs.forEach((f) => f(pending))

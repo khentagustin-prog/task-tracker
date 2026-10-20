@@ -1,2 +1,2 @@
--- I-run sa Supabase SQL Editor (para sa Updates / mga mensahe sa bawat task)
+-- Run in the Supabase SQL Editor (Updates / messages on each task)
 alter table tasks add column if not exists updates jsonb not null default '[]'::jsonb;

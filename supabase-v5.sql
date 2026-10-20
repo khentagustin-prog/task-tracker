@@ -1,2 +1,2 @@
--- I-run sa Supabase SQL Editor (para sa mga group sa loob ng board)
+-- Run in the Supabase SQL Editor (groups inside a board)
 alter table tasks add column if not exists section text;

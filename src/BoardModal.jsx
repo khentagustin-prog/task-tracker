@@ -27,14 +27,14 @@ export default function BoardModal({ existing, onCreate, onClose }) {
           <div className="m-icon" style={{ background: color }}>{(clean[0] || '+').toUpperCase()}</div>
           <div>
             <h3>Create new board</h3>
-            <p>Hiwalay na listahan ng tasks para sa isang bagay.</p>
+            <p>A separate list of tasks for one thing.</p>
           </div>
           <button type="button" className="x" onClick={onClose}>✕</button>
         </div>
 
         <label className="m-label">Board name</label>
         <input className="m-input" autoFocus maxLength={30} placeholder="e.g. For Work" value={name} onChange={(e) => setName(e.target.value)} />
-        {dup && <div className="m-err">May board na may ganyang pangalan.</div>}
+        {dup && <div className="m-err">A board with that name already exists.</div>}
 
         <div className="m-sug">
           {SUGGESTIONS.filter((s) => !existing.includes(s)).map((s) => (

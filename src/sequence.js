@@ -1,5 +1,5 @@
-// Pagbasa ng "Workflow Gap" PDF (Activation / Reminder) at pagkompyut ng schedule.
-// Puro function ito (walang browser/pdf.js) kaya nasusubukan sa node at ginagamit din sa app.
+// Reads the "Workflow Gap" PDF (Activation / Reminder) and computes the schedule.
+// Pure functions (no browser / pdf.js), so they are tested in node and also used by the app.
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const RE_DATE = /^([A-Z][a-z]{2})\s+(\d{1,2}),\s*(\d{4})$/
@@ -23,7 +23,7 @@ export function formatGap(min) {
   if (m) out.push(`${m}min${m > 1 ? 's' : ''}`)
   return out.join(' ') || '0hrs'
 }
-// "Oct 1, 2026" + "4:30 AM" -> ms (UTC-naive: walang timezone o DST na gumagalaw)
+// "Oct 1, 2026" + "4:30 AM" -> ms (UTC-naive: no timezone or DST shifts)
 export function toMs(dateStr, timeStr) {
   const d = dateStr.match(RE_DATE), t = timeStr.match(RE_TIME)
   if (!d || !t) return null
@@ -32,7 +32,7 @@ export function toMs(dateStr, timeStr) {
   return Date.UTC(Number(d[3]), mon, Number(d[2]), h, Number(t[2]))
 }
 export const msToDate = (ms) => new Date(ms).toISOString().slice(0, 10)
-export const msToTime = (ms) => new Date(ms).toISOString().slice(11, 16) // 24h "HH:MM" (ito ang gamit ng subitem)
+export const msToTime = (ms) => new Date(ms).toISOString().slice(11, 16) // 24h "HH:MM" (this is what a subitem stores)
 export const dayMs = (iso) => { const [y, m, d] = iso.split('-').map(Number); return Date.UTC(y, m - 1, d) }
 export function fmtTime12(hhmm) {
   const [h, m] = hhmm.split(':').map(Number)
@@ -40,7 +40,7 @@ export function fmtTime12(hhmm) {
 }
 
 // ---------- PDF text items -> lines -> rows ----------
-// items: [{ s, x, y }]  (galing sa pdf.js getTextContent)
+// items: [{ s, x, y }]  (from pdf.js getTextContent)
 export function itemsToLines(items) {
   const sorted = items.filter((i) => i.s.trim()).sort((a, b) => b.y - a.y || a.x - b.x)
   const lines = []
@@ -58,7 +58,7 @@ export function parseTable(items) {
   const text = lines.map((l) => l.items.map((i) => i.s.trim()).join(' '))
   const info = {}
   const rows = []
-  const frags = [] // mga piraso ng pangalan na naputol sa ibang linya (maaaring nasa itaas o ibaba ng row)
+  const frags = [] // pieces of a name that wrapped onto another line (can be above or below the row)
   const issues = []
   let inTable = false
   for (let n = 0; n < lines.length; n++) {
@@ -76,9 +76,9 @@ export function parseTable(items) {
     if (/^(Yes|No)$/i.test(cells[0]) && cells.length >= 3) {
       const di = cells.findIndex((c) => RE_DATE.test(c))
       const ti = di >= 0 ? cells.findIndex((c, k) => k > di && RE_TIME.test(c)) : -1
-      if (di < 0 || ti < 0) { issues.push(`Hindi nabasa ang row: "${line}"`); continue }
+      if (di < 0 || ti < 0) { issues.push(`Could not read the row: "${line}"`); continue }
       const mid = cells.slice(1, di)
-      if (mid.length < 1) { issues.push(`Walang Label sa row: "${line}"`); continue }
+      if (mid.length < 1) { issues.push(`No Label found in the row: "${line}"`); continue }
       const label = mid[mid.length - 1], own = mid.slice(0, -1).join(' ')
       const gapText = cells[ti + 1] && RE_GAP.test(cells[ti + 1]) ? cells[ti + 1] : null
       rows.push({ y: lines[n].y, own, done: /^yes$/i.test(cells[0]), label, dateText: cells[di], timeText: cells[ti], gapText, gap: parseGap(gapText) })
@@ -86,7 +86,7 @@ export function parseTable(items) {
       frags.push({ y: lines[n].y, text: cells[0] })
     }
   }
-  // Ilagay ang bawat naputol na piraso sa pinakamalapit na row (ayon sa y)
+  // Attach each wrapped piece to the nearest row (by y position)
   const parts = rows.map((r) => (r.own ? [{ y: r.y, text: r.own }] : []))
   for (const f of frags) {
     if (!rows.length) break
@@ -95,9 +95,9 @@ export function parseTable(items) {
     parts[best].push(f)
   }
   rows.forEach((r, i) => {
-    r.title = parts[i].sort((a, b) => b.y - a.y).map((p) => p.text).join(' ').trim() // mas mataas ang y = mas nasa itaas
+    r.title = parts[i].sort((a, b) => b.y - a.y).map((p) => p.text).join(' ').trim() // higher y = higher on the page
     delete r.own; delete r.y
-    if (!r.title) issues.push(`Walang pangalan ang row na may Label na "${r.label}".`)
+    if (!r.title) issues.push(`The row with Label "${r.label}" has no name.`)
     r.ms = toMs(r.dateText, r.timeText)
   })
   info.totalGap = parseGap(info.totalGapText)
@@ -105,45 +105,45 @@ export function parseTable(items) {
 }
 
 // ---------- validation ----------
-// Ang sariling Date/Time ng document ay dapat tumugma sa Gap column (cumulative).
+// The document's own Date/Time must match its Gap column (cumulative).
 export function validateFlow(name, rows) {
   const problems = []
-  if (!rows.length) return [`${name}: walang nabasang row.`]
-  if (rows.some((r) => r.ms == null)) problems.push(`${name}: may petsa o oras na hindi nabasa.`)
-  if (rows[0].gap !== 0) problems.push(`${name}: ang unang step ay dapat 0hrs ang gap (nabasa: ${rows[0].gapText}).`)
+  if (!rows.length) return [`${name}: no rows were read.`]
+  if (rows.some((r) => r.ms == null)) problems.push(`${name}: some dates or times could not be read.`)
+  if (rows[0].gap !== 0) problems.push(`${name}: the first step must have a 0hrs gap (read: ${rows[0].gapText}).`)
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i], prev = rows[i - 1]
-    if (r.gap == null) { problems.push(`${name}: walang Gap ang "${r.title}".`); continue }
+    if (r.gap == null) { problems.push(`${name}: "${r.title}" has no Gap.`); continue }
     const real = (r.ms - prev.ms) / MIN
-    if (real !== r.gap) problems.push(`${name}: "${r.title}" — Gap ${r.gapText} (${r.gap} min) pero ang pagitan ng Date/Time ay ${formatGap(real)} (${real} min).`)
+    if (real !== r.gap) problems.push(`${name}: "${r.title}" — Gap ${r.gapText} (${r.gap} min) but the Date/Time difference is ${formatGap(real)} (${real} min).`)
   }
   const dup = rows.map((r) => r.title).filter((t, i, a) => a.indexOf(t) !== i)
-  if (dup.length) problems.push(`${name}: may pare-parehong pangalan: ${[...new Set(dup)].join(', ')}`)
+  if (dup.length) problems.push(`${name}: duplicate names: ${[...new Set(dup)].join(', ')}`)
   return problems
 }
 
 // ---------- compute ----------
-// act/rem: parseTable() result o null. launchMs: petsa+oras ng unang Activation step (o ng Reminder kung iyon lang).
-// replace: [{ from, to }] para sa pagpalit ng code sa pangalan (hal. 0926 -> 1026)
+// act/rem: parseTable() result or null. launchMs: date+time of the first Activation step (or of Reminder if that is the only one).
+// replace: [{ from, to }] to swap the code inside names (e.g. 0926 -> 1026)
 export function compute({ act, rem, launchMs, replace = [] }) {
   const warnings = []
   const flows = []
   if (act) flows.push({ key: 'Activation', ...act })
   if (rem) flows.push({ key: 'Reminder', ...rem })
-  if (!flows.length) return { steps: [], warnings: ['Walang file.'], errors: [] }
+  if (!flows.length) return { steps: [], warnings: ['No file.'], errors: [] }
   const errors = []
   flows.forEach((f) => { errors.push(...validateFlow(f.key, f.rows)) })
 
-  // Saan magsisimula ang bawat flow
+  // Where each flow starts
   const starts = {}
   if (act) starts.Activation = launchMs
   if (rem) {
     if (act && act.rows.length && rem.rows.length) {
-      const offset = rem.rows[0].ms - act.rows[0].ms // pagitan ng unang Activation at unang Reminder sa document
+      const offset = rem.rows[0].ms - act.rows[0].ms // gap between the first Activation and the first Reminder in the document
       starts.Reminder = launchMs + offset
       for (const side of [act, rem]) {
         if (side.info.totalGap != null && side.info.totalGap * MIN !== offset) {
-          warnings.push(`"Total Gap" sa PDF (${side.info.totalGapText}) ay hindi tugma sa pagitan ng unang Activation at unang Reminder (${formatGap(offset / MIN)}).`)
+          warnings.push(`The "Total Gap" in the PDF (${side.info.totalGapText}) does not match the difference between the first Activation and the first Reminder (${formatGap(offset / MIN)}).`)
           break
         }
       }
@@ -167,7 +167,7 @@ export function compute({ act, rem, launchMs, replace = [] }) {
 
 
 // ---------- Image/review -> PDF ----------
-// Format ng Gap sa PDF nila: "0hrs", "12hrs 30mins", "1day", "6days", "4days 7hours", "3days 12hours 30mins"
+// Gap format used in their PDFs: "0hrs", "12hrs 30mins", "1day", "6days", "4days 7hours", "3days 12hours 30mins"
 export function formatGapPdf(min) {
   if (min == null || min <= 0) return '0hrs'
   const d = Math.floor(min / 1440), h = Math.floor((min % 1440) / 60), m = min % 60
@@ -180,10 +180,10 @@ export function formatGapPdf(min) {
 export const dateText = (ms) => { const d = new Date(ms); return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}` }
 export const timeText = (ms) => { const d = new Date(ms), h = d.getUTCHours(); return `${h % 12 || 12}:${String(d.getUTCMinutes()).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}` }
 
-// Ang flow ng isang row: Reminder kung ang label o pangalan ay may "Reminder"/"Rem"; kung hindi, Activation
+// The flow of a row: Reminder if the label or name has "Reminder"/"Rem"; otherwise Activation
 export const guessFlow = (r) => (/reminder/i.test(r.label || '') || /^rem[\s\d]/i.test((r.title || '').trim()) ? 'Reminder' : 'Activation')
 
-// steps: [{ flow, title, label, ms }]  ->  idinadagdag ang gap (minuto, mula sa nakaraang step ng parehong flow)
+// steps: [{ flow, title, label, ms }]  ->  adds the gap (minutes, from the previous step of the same flow)
 export function withGaps(steps) {
   const last = {}
   return steps.map((s) => {
@@ -194,13 +194,13 @@ export function withGaps(steps) {
   })
 }
 
-// Dagdag na pagsusuri laban sa maling pagbasa (mga code, numero, haba ng panahon)
+// Extra checks against misreads (codes, numbers, time span)
 const CODE_RE = /[A-Z]{2,6}-\d{4}[A-Z]{0,4}/
 export function patternChecks(steps) {
   const out = []
   const codes = [...new Set(steps.map((s) => (s.title || '').match(CODE_RE)?.[0]).filter(Boolean))]
-  if (codes.length > 1) out.push(`May magkakaibang code sa mga pangalan (${codes.join(', ')}). Iisa dapat ang code ng isang campaign — suriin ang mga pangalan.`)
-  // "Rem Call 1, 2, 4" -> kulang ang 3 (isang numero lang sa pangalan, hindi bababa sa 3 row)
+  if (codes.length > 1) out.push(`The names contain different codes (${codes.join(', ')}). A campaign should have one code — check the names.`)
+  // "Rem Call 1, 2, 4" -> 3 is missing (only one number in the name, at least 3 rows)
   const groups = {}
   for (const s of steps) {
     const t = (s.title || '').replace(CODE_RE, '').trim(), nums = t.match(/\d+/g)
@@ -211,10 +211,10 @@ export function patternChecks(steps) {
     if (u.length < 3) continue
     const miss = []
     for (let n = u[0]; n < u[u.length - 1]; n++) if (!u.includes(n)) miss.push(n)
-    if (miss.length) out.push(`"${k.replace('#', 'N')}": kulang ang numero ${miss.join(', ')} (nakita: ${u.join(', ')}).`)
+    if (miss.length) out.push(`"${k.replace('#', 'N')}": missing number(s) ${miss.join(', ')} (found: ${u.join(', ')}).`)
   }
   const ms = steps.map((s) => s.ms).filter((x) => x != null)
-  if (ms.length > 1 && (Math.max(...ms) - Math.min(...ms)) / 86400000 > 62) out.push('Higit 62 araw ang pagitan ng una at huling step. Tiyaking tama ang taon at mga petsa.')
+  if (ms.length > 1 && (Math.max(...ms) - Math.min(...ms)) / 86400000 > 62) out.push('The first and last steps are more than 62 days apart. Make sure the year and dates are correct.')
   return out
 }
 
@@ -223,13 +223,13 @@ export function validateReview(steps) {
   for (const flow of ['Activation', 'Reminder']) {
     const list = steps.filter((s) => s.flow === flow)
     list.forEach((s, i) => {
-      if (!s.title?.trim()) errors.push(`${flow} #${i + 1}: walang pangalan.`)
-      if (s.ms == null || Number.isNaN(s.ms)) errors.push(`${flow} "${s.title || '#' + (i + 1)}": walang buong petsa/oras.`)
-      if (i > 0 && s.ms != null && list[i - 1].ms != null && s.ms < list[i - 1].ms) errors.push(`${flow} "${s.title}": mas maaga ito kaysa sa nakaraang step (${list[i - 1].title}).`)
-      if (s.uncertain) warnings.push(`${flow} "${s.title}": hindi tiyak ng AI${s.note ? ` — ${s.note}` : ''}. Suriin sa larawan.`)
+      if (!s.title?.trim()) errors.push(`${flow} #${i + 1}: no name.`)
+      if (s.ms == null || Number.isNaN(s.ms)) errors.push(`${flow} "${s.title || '#' + (i + 1)}": missing a complete date/time.`)
+      if (i > 0 && s.ms != null && list[i - 1].ms != null && s.ms < list[i - 1].ms) errors.push(`${flow} "${s.title}": this is earlier than the previous step (${list[i - 1].title}).`)
+      if (s.uncertain) warnings.push(`${flow} "${s.title}": the AI is not sure${s.note ? ` — ${s.note}` : ''}. Check it against the image.`)
     })
     const dup = list.map((s) => s.title.trim()).filter((t, i, a) => t && a.indexOf(t) !== i)
-    if (dup.length) errors.push(`${flow}: may pare-parehong pangalan: ${[...new Set(dup)].join(', ')}`)
+    if (dup.length) errors.push(`${flow}: duplicate names: ${[...new Set(dup)].join(', ')}`)
   }
   warnings.push(...patternChecks(steps))
   return { errors, warnings }
@@ -243,21 +243,21 @@ export function summaryOf(steps) {
 }
 
 
-// Paghahambing ng dalawang magkahiwalay na pagbasa ng AI (rows: [{ title, label, month, day, time }]).
-// Ibinabalik: { diffs: { [index]: "paliwanag" }, warnings: [string] }
+// Comparison of two independent AI reads (rows: [{ title, label, month, day, time }]).
+// Returns: { diffs: { [index]: "explanation" }, warnings: [string] }
 export function compareReads(a, b) {
   const diffs = {}, warnings = []
-  if (a.length !== b.length) warnings.push(`Magkaiba ang bilang ng row sa dalawang pagbasa (${a.length} vs ${b.length}). Suriin kung kulang o sobra.`)
+  if (a.length !== b.length) warnings.push(`The two reads found a different number of rows (${a.length} vs ${b.length}). Check for missing or extra rows.`)
   a.forEach((r, i) => {
     const q = b[i]
-    if (!q) { diffs[i] = 'wala sa ikalawang pagbasa'; return }
+    if (!q) { diffs[i] = 'missing from the second read'; return }
     const d = []
-    if ((r.title || '').trim() !== (q.title || '').trim()) d.push(`pangalan: "${q.title}"`)
+    if ((r.title || '').trim() !== (q.title || '').trim()) d.push(`name: "${q.title}"`)
     if ((r.label || '').trim().toLowerCase() !== (q.label || '').trim().toLowerCase()) d.push(`label: "${q.label}"`)
-    if (Number(r.month) !== Number(q.month) || Number(r.day) !== Number(q.day)) d.push(`petsa: ${q.month}/${q.day}`)
-    if ((r.time || '') !== (q.time || '')) d.push(`oras: ${q.time}`)
+    if (Number(r.month) !== Number(q.month) || Number(r.day) !== Number(q.day)) d.push(`date: ${q.month}/${q.day}`)
+    if ((r.time || '') !== (q.time || '')) d.push(`time: ${q.time}`)
     if (d.length) diffs[i] = d.join(', ')
   })
-  if (a.length !== b.length) a.forEach((_, i) => { diffs[i] = diffs[i] ? `${diffs[i]}; magkaiba ang bilang ng row` : 'magkaiba ang bilang ng row sa dalawang pagbasa' })
+  if (a.length !== b.length) a.forEach((_, i) => { diffs[i] = diffs[i] ? `${diffs[i]}; different number of rows` : 'the two reads have a different number of rows' })
   return { diffs, warnings }
 }

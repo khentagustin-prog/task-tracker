@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { subscribe } from './net.js'
 
-// Manipis na bar sa itaas: umaakyat habang may request, kumukumpleto pag tapos na.
+// Thin bar at the top: climbs while a request is running and completes when it finishes.
 export default function TopBar() {
   const [w, setW] = useState(0)
   const [show, setShow] = useState(false)

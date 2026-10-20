@@ -14,7 +14,7 @@ const ICON = { docx: '📘', pdf: '📕', image: '🖼', video: '🎞', audio: '
 const fmt = (n) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round((n || 0) / 1024))} KB`)
 const dl = (f) => `${f.url}?download=${encodeURIComponent(f.name)}`
 
-// Lumalabas kapag itinapat o pinindot ang 📎. Fixed ang posisyon para hindi maputol ng table.
+// Appears when you hover or click 📎. Fixed position so the table does not clip it.
 export function FilePopover({ files, x, y, onPreview, onEnter, onLeave }) {
   const left = Math.max(8, Math.min(x - 300, window.innerWidth - 308))
   return (
@@ -40,7 +40,7 @@ function DocxView({ url }) {
         const [{ default: mammoth }, buf] = await Promise.all([import('mammoth/mammoth.browser'), fetch(url).then((r) => r.arrayBuffer())])
         const { value } = await mammoth.convertToHtml({ arrayBuffer: buf })
         if (live) setState({ html: value, err: '', loading: false })
-      } catch (e) { if (live) setState({ html: '', err: 'Hindi ma-preview ang document na ito.', loading: false }) }
+      } catch (e) { if (live) setState({ html: '', err: 'This document cannot be previewed.', loading: false }) }
     })()
     return () => { live = false }
   }, [url])
@@ -77,7 +77,7 @@ export function FilePreview({ file, onClose }) {
           {kind === 'other' && (
             <div className="fprev-other">
               <div style={{ fontSize: 44 }}>{ICON.other}</div>
-              <p>Hindi ma-preview ang ganitong klase ng file sa loob ng app.</p>
+              <p>This kind of file cannot be previewed in the app.</p>
               <a className="primary" href={dl(file)}>Download</a>
             </div>
           )}

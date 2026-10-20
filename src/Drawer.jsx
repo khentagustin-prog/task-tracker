@@ -85,7 +85,7 @@ export default function Drawer({ task, statuses, priorities, groups, onPatch, on
             <div className="upd-box">
               <textarea placeholder="Write an update..." value={draft} onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); post() } }} />
-              <div className="upd-foot"><span className="muted">Enter para i-post · Shift+Enter para sa bagong linya</span><button className="primary" disabled={!draft.trim()} onClick={post}>Update</button></div>
+              <div className="upd-foot"><span className="muted">Enter to post · Shift+Enter for a new line</span><button className="primary" disabled={!draft.trim()} onClick={post}>Update</button></div>
             </div>
             {!updates.length ? (
               <div className="upd-empty">
@@ -107,7 +107,7 @@ export default function Drawer({ task, statuses, priorities, groups, onPatch, on
                 ))}
               </ul>
             )}
-            {delUpd && <ConfirmModal title="Delete this update?" message="Hindi na ito maibabalik." detail={<span style={{ color: 'inherit' }}>{delUpd.text.slice(0, 120)}</span>}
+            {delUpd && <ConfirmModal title="Delete this update?" message="This cannot be undone." detail={<span style={{ color: 'inherit' }}>{delUpd.text.slice(0, 120)}</span>}
               onClose={() => setDelUpd(null)} onConfirm={() => { onPatch(task.id, { updates: updates.filter((x) => x.id !== delUpd.id) }); setDelUpd(null) }} />}
           </div>
         )}
@@ -115,7 +115,7 @@ export default function Drawer({ task, statuses, priorities, groups, onPatch, on
         {tab === 'files' && (<div>
         {!filesEnabled ? <p className="muted">File upload needs VITE_SUPABASE_URL and VITE_SUPABASE_KEY in .env</p> : (
           <label className="drop" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); upload([...e.dataTransfer.files]) }}>
-            {busy ? 'Uploading... huwag isara' : 'Click or drop files here to upload'}
+            {busy ? 'Uploading... please keep this open' : 'Click or drop files here to upload'}
             <input type="file" multiple hidden onChange={(e) => { upload([...e.target.files]); e.target.value = '' }} />
           </label>
         )}
@@ -172,7 +172,7 @@ export default function Drawer({ task, statuses, priorities, groups, onPatch, on
 
         <button className="danger" onClick={() => setConfirming(true)}>Delete task</button>
         {confirming && (
-          <ConfirmModal title="Delete this task?" message="Hindi na ito maibabalik pagkatapos." busy={deleting}
+          <ConfirmModal title="Delete this task?" message="This cannot be undone." busy={deleting}
             detail={<><b>{task.title}</b>{files.length > 0 && <span>{files.length} file{files.length > 1 ? 's' : ''} will also be deleted</span>}</>}
             onConfirm={destroy} onClose={() => setConfirming(false)} />
         )}

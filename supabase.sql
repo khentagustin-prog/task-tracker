@@ -10,7 +10,7 @@ create table if not exists tasks (
   created_at timestamptz not null default now()
 );
 
--- Payagan ang publishable (anon) key na gamitin ang table (personal na app lang ito)
+-- Allow the publishable (anon) key to use the table (this is a personal app)
 alter table tasks enable row level security;
 drop policy if exists "anon all" on tasks;
 create policy "anon all" on tasks for all to anon using (true) with check (true);

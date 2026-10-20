@@ -1,6 +1,6 @@
 import { track } from './net.js'
 import { getKey, authFailed } from './auth.js'
-// File uploads diretso sa Supabase Storage (bucket: task-files).
+// File uploads go straight to Supabase Storage (bucket: task-files).
 const URL_ = import.meta.env.VITE_SUPABASE_URL
 const KEY = import.meta.env.VITE_SUPABASE_KEY
 const BUCKET = 'task-files'
@@ -9,7 +9,7 @@ const headers = { apikey: KEY, Authorization: `Bearer ${KEY}` }
 const N8N = import.meta.env.VITE_N8N_BASE_URL
 export const filesEnabled = Boolean(N8N || (URL_ && KEY))
 
-// XHR (hindi fetch) para may totoong upload progress. onProgress(0..100)
+// XHR (not fetch) so there is real upload progress. onProgress(0..100)
 export function uploadFile(taskId, file, onProgress = () => {}) {
   const safe = file.name.replace(/[^\w.\-]+/g, '_')
   const path = `${taskId}/${Date.now()}-${safe}`
@@ -28,8 +28,8 @@ export function uploadFile(taskId, file, onProgress = () => {}) {
       xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
     }
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(Math.min(99, Math.round((e.loaded / e.total) * 100)))
-    xhr.onload = () => { if (xhr.status >= 200 && xhr.status < 300) { onProgress(100); resolve(result) } else { if (xhr.status === 403) authFailed(); reject(new Error(xhr.status === 403 ? 'Walang pahintulot (mali ang access key)' : `Upload failed (${xhr.status})`)) } }
-    xhr.onerror = () => reject(new Error('Walang internet o hindi maabot ang server'))
+    xhr.onload = () => { if (xhr.status >= 200 && xhr.status < 300) { onProgress(100); resolve(result) } else { if (xhr.status === 403) authFailed(); reject(new Error(xhr.status === 403 ? 'Not allowed (wrong access key)' : `Upload failed (${xhr.status})`)) } }
+    xhr.onerror = () => reject(new Error('No internet, or the server cannot be reached'))
     xhr.send(body)
   }))
 }

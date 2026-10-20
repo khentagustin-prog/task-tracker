@@ -8,8 +8,8 @@ export default function Archive({ items, statuses, colorOf, onRestore, onDelete,
   const [busy, setBusy] = useState(false)
   return (
     <div className="arch">
-      <div className="top"><div><h1>Archive</h1><p className="muted">{items.length} archived {items.length === 1 ? 'task' : 'tasks'} · hindi ito kasama sa table at dashboard.</p></div></div>
-      {!items.length ? <div className="empty" style={{ marginTop: 16 }}>Walang naka-archive. Piliin ang mga tapos na task sa table at i-click ang <b>Archive</b>.</div> : (
+      <div className="top"><div><h1>Archive</h1><p className="muted">{items.length} archived {items.length === 1 ? 'task' : 'tasks'} · not shown in the table or dashboard.</p></div></div>
+      {!items.length ? <div className="empty" style={{ marginTop: 16 }}>Nothing archived yet. Select finished tasks in the table and click <b>Archive</b>.</div> : (
         <div className="arch-list">
           <div className="arow ahead"><span>Task</span><span>Board</span><span>Status</span><span>Due</span><span /></div>
           {items.map((t) => {
@@ -30,7 +30,7 @@ export default function Archive({ items, statuses, colorOf, onRestore, onDelete,
           })}
         </div>
       )}
-      {del && <ConfirmModal busy={busy} title="Delete permanently?" message="Mabubura ito nang tuluyan, pati ang mga file nito."
+      {del && <ConfirmModal busy={busy} title="Delete permanently?" message="This will be deleted permanently, including its files."
         detail={<b>{del.title}</b>} onClose={() => !busy && setDel(null)}
         onConfirm={async () => { setBusy(true); await onDelete(del); setBusy(false); setDel(null) }} />}
     </div>

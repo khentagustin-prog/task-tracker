@@ -1,4 +1,4 @@
-// Access key para sa n8n webhooks. Una: VITE_API_KEY (local dev). Kung wala: ang itinype ng user (naka-save sa browser).
+// Access key for the n8n webhooks. First VITE_API_KEY (local dev); otherwise whatever the user typed (saved in the browser).
 const STORE = 'app-key-v1'
 export const getKey = () => {
   const env = import.meta.env.VITE_API_KEY

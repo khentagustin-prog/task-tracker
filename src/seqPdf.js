@@ -2,7 +2,7 @@ import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { formatGapPdf, dateText, timeText } from './sequence.js'
 
-// Gumagawa ng "Workflow Gap" PDF na kapareho ng format ng orihinal (A4, Done/Subitem/Label/Date/Time/Gap/Time OK/CRM OK).
+// Builds a "Workflow Gap" PDF in the same format as the original (A4, Done/Subitem/Label/Date/Time/Gap/Time OK/CRM OK).
 // meta: { title, assignedTo, organization, casino, campaignDates, generated, workflow }
 // rows: [{ title, label, ms, gap }]   summary: { totalText, from, to } | null
 export function buildSequencePdf({ meta, rows, summary }) {

@@ -1,8 +1,8 @@
--- I-run sa Supabase SQL Editor (para sa tags at file uploads)
+-- Run in the Supabase SQL Editor (tags and file uploads)
 alter table tasks add column if not exists tags jsonb not null default '[]'::jsonb;
 alter table tasks add column if not exists attachments jsonb not null default '[]'::jsonb;
 
--- Storage bucket para sa docs
+-- Storage bucket for documents
 insert into storage.buckets (id, name, public) values ('task-files', 'task-files', true)
 on conflict (id) do nothing;
 

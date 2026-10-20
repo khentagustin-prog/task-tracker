@@ -65,7 +65,7 @@ export default function Dashboard({ tasks, statuses, boards, colorOf, onOpenTask
 
   return (
     <div className="dash">
-      <div className="top"><div><h1>Dashboard</h1><p className="muted">Buod ng lahat ng tasks mo.</p></div></div>
+      <div className="top"><div><h1>Dashboard</h1><p className="muted">A summary of all your tasks.</p></div></div>
 
       <div className="d-filter" role="tablist">
         {['all', ...boards].map((b) => (
@@ -93,7 +93,7 @@ export default function Dashboard({ tasks, statuses, boards, colorOf, onOpenTask
 
       <section className="d-card">
         <h3>Status breakdown <small>{m.total} tasks</small></h3>
-        {m.total === 0 ? <p className="d-empty">Wala pang tasks.</p> : (
+        {m.total === 0 ? <p className="d-empty">No tasks yet.</p> : (
           <div className="d-stack">
             {m.byStatus.filter((s) => s.n > 0).map((s) => (
               <i key={s.id} style={{ flex: s.n, background: s.color }} {...tipProps(`${s.label}: ${s.n} (${pctOf(s.n, m.total)}%)`)} />
@@ -134,8 +134,8 @@ export default function Dashboard({ tasks, statuses, boards, colorOf, onOpenTask
       </section>
 
       <div className="d-two">
-        <TaskList title="Overdue" empty="Walang overdue. 🎉" items={m.overdue} statuses={statuses} onOpen={onOpenTask} />
-        <TaskList title="Due in the next 7 days" empty="Walang due sa susunod na 7 araw." items={m.soon} statuses={statuses} onOpen={onOpenTask} />
+        <TaskList title="Overdue" empty="Nothing overdue. 🎉" items={m.overdue} statuses={statuses} onOpen={onOpenTask} />
+        <TaskList title="Due in the next 7 days" empty="Nothing due in the next 7 days." items={m.soon} statuses={statuses} onOpen={onOpenTask} />
       </div>
 
       {tip && <div className="d-tip" style={{ left: tip.x + 12, top: tip.y + 14 }}>{tip.text}</div>}

@@ -1,4 +1,4 @@
--- I-run sa Supabase SQL Editor (para sa settings: statuses, boards, kulay)
+-- Run in the Supabase SQL Editor (settings: statuses, boards, colors)
 create table if not exists app_settings (
   key text primary key,
   value jsonb not null,

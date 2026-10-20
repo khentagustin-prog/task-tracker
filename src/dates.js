@@ -1,6 +1,6 @@
 export const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
-// Ilipat ang petsa (YYYY-MM-DD) ng n araw / linggo / buwan. Sa buwan: Jan 31 + 1 buwan = Feb 28 (hindi lumalampas).
+// Shift a date (YYYY-MM-DD) by n days / weeks / months. For months: Jan 31 + 1 month = Feb 28 (never overflows).
 export function shiftDate(s, n, unit) {
   if (!s || !n) return s || null
   const [y, m, d] = s.split('-').map(Number)
@@ -12,7 +12,7 @@ export function shiftDate(s, n, unit) {
   return new Date(Date.UTC(y, m - 1, d + n * (unit === 'weeks' ? 7 : 1))).toISOString().slice(0, 10)
 }
 
-// "November 2026" -> "December 2026" (+1 buwan). Kung hindi buwan ang pangalan: "<pangalan> (copy)".
+// "November 2026" -> "December 2026" (+1 month). If the name is not a month: "<name> (copy)".
 export function suggestCopy(name) {
   const m = name.trim().match(/^([A-Za-z]+)\s+(\d{4})$/)
   const i = m ? MONTHS.findIndex((x) => x.toLowerCase() === m[1].toLowerCase()) : -1

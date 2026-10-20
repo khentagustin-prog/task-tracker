@@ -1,6 +1,6 @@
 import { track } from './net.js'
 import { getKey, authFailed } from './auth.js'
-// Data layer: n8n webhooks kung may VITE_N8N_BASE_URL, kung wala localStorage.
+// Data layer: n8n webhooks when VITE_N8N_BASE_URL is set, otherwise localStorage.
 const BASE = import.meta.env.VITE_N8N_BASE_URL
 const KEY = 'tasks-v1'
 
@@ -15,7 +15,7 @@ async function call(path, method, body) {
     headers: { 'Content-Type': 'application/json', 'x-app-key': getKey() },
     body: body ? JSON.stringify(body) : undefined,
   }))
-  if (res.status === 403) { authFailed(); throw new Error('Walang pahintulot (mali ang access key)') }
+  if (res.status === 403) { authFailed(); throw new Error('Not allowed (wrong access key)') }
   if (!res.ok) throw new Error(`n8n ${res.status}`)
   const text = await res.text()
   return text ? JSON.parse(text) : []

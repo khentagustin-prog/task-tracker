@@ -5,7 +5,7 @@ import { tagColor } from './Drawer.jsx'
 const fmt = (n) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`)
 
 export default function TaskModal({ statuses, priorities, groups, initial, onCreate, onClose }) {
-  const id = useMemo(() => crypto.randomUUID(), []) // para may folder na agad ang files
+  const id = useMemo(() => crypto.randomUUID(), []) // so files get a folder right away
   const [f, setF] = useState({ title: '', group_name: initial.group_name, status: initial.status, priority: 'medium', due_date: '', notes: '' })
   const [tags, setTags] = useState([])
   const [tag, setTag] = useState('')
@@ -17,7 +17,7 @@ export default function TaskModal({ statuses, priorities, groups, initial, onCre
   const uploading = Object.keys(progress).length > 0
 
   const close = () => {
-    if (!saving) files.forEach((x) => deleteFile(x.path).catch(() => {})) // walang naiiwang file kapag cancel
+    if (!saving) files.forEach((x) => deleteFile(x.path).catch(() => {})) // no files left behind on cancel
     onClose()
   }
   useEffect(() => {
@@ -57,7 +57,7 @@ export default function TaskModal({ statuses, priorities, groups, initial, onCre
         <div className="m-head">
           <div>
             <h3>New task</h3>
-            <p>Ilagay na rito ang lahat ng detalye.</p>
+            <p>Add all the details here.</p>
           </div>
           <button type="button" className="x" onClick={close}>✕</button>
         </div>

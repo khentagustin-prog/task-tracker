@@ -1,6 +1,6 @@
-// Gumagawa ng n8n workflow na "Task Tracker - Extract" (POST /webhook/extract): binabasa ng Claude ang larawan ng sequence.
-// Usage: AUTH_CRED_ID=<id ng Header Auth credential ng webhook> [PROVIDER=groq|claude] [LLM_CRED_ID=<id>] node n8n/build-extract-workflow.mjs [outfile]
-// Default: groq (qwen/qwen3.8-27b; isang pagbasa + isang retry; ang app ang gumagawa ng ikalawang pagbasa para sa paghahambing). claude = isang pagbasa gamit ang Claude.
+// Builds the n8n workflow "Task Tracker - Extract" (POST /webhook/extract): an AI reads the sequence image.
+// Usage: AUTH_CRED_ID=<id of the webhook Header Auth credential> [PROVIDER=groq|claude] [LLM_CRED_ID=<id>] node n8n/build-extract-workflow.mjs [outfile]
+// Default: groq (qwen/qwen3.8-27b; one read + one retry; the app makes the second read for the comparison). claude = a single read with Claude.
 import { writeFileSync } from 'node:fs'
 
 export const PROMPT = `This image is a screenshot of a project-board subitem table. Transcribe EVERY row, top to bottom, exactly as it is shown.
@@ -37,12 +37,12 @@ export const SCHEMA = {
 
 // Code node 1: gumagawa ng request body para sa Claude Messages API
 export const BUILD_CODE = `const bin = $input.first().binary && $input.first().binary.image
-if (!bin) return [{ json: { error: 'Walang larawan. Ipadala ang file sa field na "image".' } }]
+if (!bin) return [{ json: { error: 'No image received. Send the file in the "image" field.' } }]
 const ok = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
 const mediaType = bin.mimeType === 'image/jpg' ? 'image/jpeg' : bin.mimeType
-if (!ok.includes(mediaType)) return [{ json: { error: 'Ang larawan ay dapat PNG, JPG, WEBP o GIF (nakuha: ' + bin.mimeType + ').' } }]
+if (!ok.includes(mediaType)) return [{ json: { error: 'The image must be PNG, JPG, WEBP or GIF (got: ' + bin.mimeType + ').' } }]
 const buf = await this.helpers.getBinaryDataBuffer(0, 'image')
-if (buf.length > 5 * 1024 * 1024) return [{ json: { error: 'Masyadong malaki ang larawan (higit 5 MB). Paliitin o i-crop ito.' } }]
+if (buf.length > 5 * 1024 * 1024) return [{ json: { error: 'The image is too large (over 5 MB). Shrink or crop it.' } }]
 const body = {
   model: 'claude-opus-5-5',
   max_tokens: 16000,
@@ -59,15 +59,15 @@ return [{ json: { body } }]`
 // Code node 2: sinusuri ang sagot ng Claude at ibinabalik ang { rows } o { error }
 export const PARSE_CODE = `const r = $input.first().json
 if (r.error && typeof r.error === 'string') return [{ json: { error: r.error } }]
-if (r.body === undefined && r.type === undefined && r.content === undefined) return [{ json: { error: 'Walang sagot mula sa AI.' } }]
-if (r.type === 'error') return [{ json: { error: 'Error mula sa AI: ' + ((r.error && r.error.message) || 'hindi malaman') } }]
-if (r.stop_reason === 'refusal') return [{ json: { error: 'Tumanggi ang AI na basahin ang larawan.' } }]
-if (r.stop_reason === 'max_tokens') return [{ json: { error: 'Naputol ang sagot ng AI (masyadong mahaba). Subukan ang mas maliit na larawan.' } }]
+if (r.body === undefined && r.type === undefined && r.content === undefined) return [{ json: { error: 'No answer from the AI.' } }]
+if (r.type === 'error') return [{ json: { error: 'AI error: ' + ((r.error && r.error.message) || 'unknown') } }]
+if (r.stop_reason === 'refusal') return [{ json: { error: 'The AI refused to read the image.' } }]
+if (r.stop_reason === 'max_tokens') return [{ json: { error: 'The AI answer was cut off (too long). Try a smaller image.' } }]
 const block = (r.content || []).find((b) => b.type === 'text')
-if (!block) return [{ json: { error: 'Walang laman ang sagot ng AI.' } }]
+if (!block) return [{ json: { error: 'The AI answer was empty.' } }]
 let data
-try { data = JSON.parse(block.text) } catch (e) { return [{ json: { error: 'Hindi mabasa ang sagot ng AI (hindi tamang JSON).' } }] }
-if (!data || !Array.isArray(data.rows) || !data.rows.length) return [{ json: { error: 'Walang nakitang row sa larawan.' } }]
+try { data = JSON.parse(block.text) } catch (e) { return [{ json: { error: 'The AI answer could not be read (not valid JSON).' } }] }
+if (!data || !Array.isArray(data.rows) || !data.rows.length) return [{ json: { error: 'No rows were found in the image.' } }]
 const bad = []
 const rows = data.rows.map((x, i) => {
   const row = {
@@ -76,27 +76,27 @@ const rows = data.rows.map((x, i) => {
     uncertain: Boolean(x.uncertain), note: String(x.note == null ? '' : x.note),
   }
   const m = row.time.match(/^(\\d{2}):(\\d{2})$/)
-  if (!row.title) bad.push('row ' + (i + 1) + ': walang pangalan')
-  if (!(row.month >= 1 && row.month <= 12 && Number.isInteger(row.month))) bad.push('row ' + (i + 1) + ': hindi tamang buwan')
-  if (!(row.day >= 1 && row.day <= 31 && Number.isInteger(row.day))) bad.push('row ' + (i + 1) + ': hindi tamang araw')
-  if (!m || +m[1] > 23 || +m[2] > 59) bad.push('row ' + (i + 1) + ': hindi tamang oras "' + row.time + '"')
+  if (!row.title) bad.push('row ' + (i + 1) + ': no name')
+  if (!(row.month >= 1 && row.month <= 12 && Number.isInteger(row.month))) bad.push('row ' + (i + 1) + ': invalid month')
+  if (!(row.day >= 1 && row.day <= 31 && Number.isInteger(row.day))) bad.push('row ' + (i + 1) + ': invalid day')
+  if (!m || +m[1] > 23 || +m[2] > 59) bad.push('row ' + (i + 1) + ': invalid time "' + row.time + '"')
   return row
 })
-if (bad.length) return [{ json: { error: 'May hindi tamang laman ang sagot ng AI: ' + bad.slice(0, 5).join('; ') } }]
+if (bad.length) return [{ json: { error: 'The AI answer has invalid content: ' + bad.slice(0, 5).join('; ') } }]
 return [{ json: { rows } }]`
 
 
 export const GROQ_MODEL = 'qwen/qwen3.8-27b'
 const SYSTEM = 'You are a precise transcription tool. You copy what is visible and never guess.'
 
-// Groq: Code node 1 - ginagawa ang request body para sa Groq (OpenAI-compatible chat completions na may larawan)
+// Groq: Code node 1 - builds the request body for Groq (OpenAI-compatible chat completions with an image)
 export const GROQ_BUILD_CODE = `const bin = $input.first().binary && $input.first().binary.image
-if (!bin) return [{ json: { error: 'Walang larawan. Ipadala ang file sa field na "image".' } }]
+if (!bin) return [{ json: { error: 'No image received. Send the file in the "image" field.' } }]
 const ok = ['image/png', 'image/jpeg', 'image/webp']
 const mediaType = bin.mimeType === 'image/jpg' ? 'image/jpeg' : bin.mimeType
-if (!ok.includes(mediaType)) return [{ json: { error: 'Ang larawan ay dapat PNG, JPG o WEBP (nakuha: ' + bin.mimeType + ').' } }]
+if (!ok.includes(mediaType)) return [{ json: { error: 'The image must be PNG, JPG or WEBP (got: ' + bin.mimeType + ').' } }]
 const buf = await this.helpers.getBinaryDataBuffer(0, 'image')
-if (buf.length > 4 * 1024 * 1024) return [{ json: { error: 'Masyadong malaki ang larawan (higit 4 MB). Paliitin o i-crop ito.' } }]
+if (buf.length > 4 * 1024 * 1024) return [{ json: { error: 'The image is too large (over 4 MB). Shrink or crop it.' } }]
 const url = 'data:' + mediaType + ';base64,' + buf.toString('base64')
 const make = (temperature) => ({
   model: ${JSON.stringify(GROQ_MODEL)},
@@ -111,26 +111,26 @@ const make = (temperature) => ({
 })
 return [{ json: { body: make(0.1) } }]`
 
-// Groq: Code node 2 - sinusuri ang sagot at ibinabalik ang { rows, warnings } o { error }
+// Groq: Code node 2 - validates the answer and returns { rows, warnings } or { error }
 export const GROQ_COMPARE_CODE = `const clean = (r, label) => {
-  if (!r || typeof r !== 'object') return { error: label + ': walang sagot.' }
+  if (!r || typeof r !== 'object') return { error: label + ': no answer.' }
   if (r.error) return { error: label + ': ' + (typeof r.error === 'string' ? r.error : (r.error.message || 'error mula sa AI')) }
   const ch = r.choices && r.choices[0]
-  if (!ch) return { error: label + ': walang sagot mula sa AI.' }
-  if (ch.finish_reason === 'length') return { error: label + ': naputol ang sagot (masyadong mahaba).' }
+  if (!ch) return { error: label + ': no answer from the AI.' }
+  if (ch.finish_reason === 'length') return { error: label + ': the answer was cut off (too long).' }
   let t = String((ch.message && ch.message.content) || '')
   t = t.replace(/<think>[\\s\\S]*?<\\/think>/g, '').replace(/^\\s*\`\`\`(?:json)?/i, '').replace(/\`\`\`\\s*$/, '').trim()
   let data
-  try { data = JSON.parse(t) } catch (e) { return { error: label + ': hindi tamang JSON ang sagot.' } }
-  if (!data || !Array.isArray(data.rows) || !data.rows.length) return { error: label + ': walang nakitang row sa larawan.' }
+  try { data = JSON.parse(t) } catch (e) { return { error: label + ': the answer is not valid JSON.' } }
+  if (!data || !Array.isArray(data.rows) || !data.rows.length) return { error: label + ': no rows were found in the image.' }
   const bad = []
   const rows = data.rows.map((x, i) => {
     const row = { title: String(x.title == null ? '' : x.title).trim(), label: String(x.label == null ? '' : x.label).trim(), month: Number(x.month), day: Number(x.day), time: String(x.time == null ? '' : x.time).trim(), uncertain: Boolean(x.uncertain), note: String(x.note == null ? '' : x.note) }
     const m = row.time.match(/^(\\d{2}):(\\d{2})$/)
-    if (!row.title) bad.push('row ' + (i + 1) + ': walang pangalan')
-    if (!(Number.isInteger(row.month) && row.month >= 1 && row.month <= 12)) bad.push('row ' + (i + 1) + ': hindi tamang buwan')
-    if (!(Number.isInteger(row.day) && row.day >= 1 && row.day <= 31)) bad.push('row ' + (i + 1) + ': hindi tamang araw')
-    if (!m || +m[1] > 23 || +m[2] > 59) bad.push('row ' + (i + 1) + ': hindi tamang oras "' + row.time + '"')
+    if (!row.title) bad.push('row ' + (i + 1) + ': no name')
+    if (!(Number.isInteger(row.month) && row.month >= 1 && row.month <= 12)) bad.push('row ' + (i + 1) + ': invalid month')
+    if (!(Number.isInteger(row.day) && row.day >= 1 && row.day <= 31)) bad.push('row ' + (i + 1) + ': invalid day')
+    if (!m || +m[1] > 23 || +m[2] > 59) bad.push('row ' + (i + 1) + ': invalid time "' + row.time + '"')
     return row
   })
   if (bad.length) return { error: label + ': ' + bad.slice(0, 4).join('; ') }
@@ -138,8 +138,8 @@ export const GROQ_COMPARE_CODE = `const clean = (r, label) => {
 }
 const pick = (name) => { try { const j = $(name).first().json; return j } catch (e) { return null } }
 const raw = pick('Groq read (retry)') || pick('Groq read')
-const A = clean(raw, 'Pagbasa')
-if (A.error) return [{ json: { error: 'Hindi nabasa ng AI ang larawan. ' + A.error + ' Subukan ulit pagkalipas ng isang minuto.' } }]
+const A = clean(raw, 'Read')
+if (A.error) return [{ json: { error: 'The AI could not read the image. ' + A.error + ' Try again in a minute.' } }]
 return [{ json: { rows: A.rows, warnings: [] } }]`
 
 export function build(authCredId = 'REPLACE_ME', provider = 'groq', llmCredId = 'REPLACE_ME') {
@@ -150,7 +150,7 @@ export function build(authCredId = 'REPLACE_ME', provider = 'groq', llmCredId = 
       parameters: { method: 'POST', url: 'https://api.groq.com/openai/v1/chat/completions', authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth',
         sendHeaders: true, headerParameters: { parameters: [{ name: 'content-type', value: 'application/json' }] },
         sendBody: true, specifyBody: 'json', jsonBody: "={{ JSON.stringify($('Build Request').first().json.body) }}", options: { timeout: 120000 } },
-      notes: 'Gumagamit ng umiiral na Header Auth credential na "grock" (Authorization: Bearer <Groq key>).' })
+      notes: 'Uses the existing Header Auth credential "grock" (Authorization: Bearer <Groq key>).' })
     const nodes = [
       { id: 'extract-hook', name: 'Extract Hook', type: 'n8n-nodes-base.webhook', typeVersion: 2, position: [0, 0], webhookId: 'extract-post', credentials: auth,
         parameters: { httpMethod: 'POST', path: 'extract', authentication: 'headerAuth', responseMode: 'responseNode', options: { allowedOrigins: '*' } } },
@@ -160,7 +160,7 @@ export function build(authCredId = 'REPLACE_ME', provider = 'groq', llmCredId = 
       groqNode('groq-1', 'Groq read', 780),
       { id: 'failed', name: 'Read failed?', type: 'n8n-nodes-base.if', typeVersion: 2.2, position: [1040, -80],
         parameters: { conditions: { options: { caseSensitive: true, typeValidation: 'loose', version: 2 }, combinator: 'and', conditions: [{ id: 'c3', leftValue: '={{ $json.error }}', rightValue: '', operator: { type: 'string', operation: 'notEmpty', singleValue: true } }] } } },
-      { id: 'pause', name: 'Wait 30s (rate limit)', type: 'n8n-nodes-base.wait', typeVersion: 1.1, position: [1300, -160], webhookId: 'extract-pause', parameters: { amount: 30, unit: 'seconds' }, notes: 'Kapag na-rate limit ng Groq (limitasyon bawat minuto), maghihintay ng 30 segundo at uulitin nang isang beses.' },
+      { id: 'pause', name: 'Wait 30s (rate limit)', type: 'n8n-nodes-base.wait', typeVersion: 1.1, position: [1300, -160], webhookId: 'extract-pause', parameters: { amount: 30, unit: 'seconds' }, notes: 'If Groq rate-limits the call (limit per minute), wait 30 seconds and retry once.' },
       groqNode('groq-retry', 'Groq read (retry)', 1560),
       { id: 'compare', name: 'Validate Answer', type: 'n8n-nodes-base.code', typeVersion: 2, position: [1820, -80], parameters: { jsCode: GROQ_COMPARE_CODE } },
       { id: 'respond', name: 'Respond', type: 'n8n-nodes-base.respondToWebhook', typeVersion: 1.1, position: [2080, 0],
@@ -188,7 +188,7 @@ export function build(authCredId = 'REPLACE_ME', provider = 'groq', llmCredId = 
       parameters: { method: 'POST', url: 'https://api.anthropic.com/v1/messages', authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth',
         sendHeaders: true, headerParameters: { parameters: [{ name: 'anthropic-version', value: '2023-06-01' }, { name: 'content-type', value: 'application/json' }] },
         sendBody: true, specifyBody: 'json', jsonBody: '={{ JSON.stringify($json.body) }}', options: { timeout: 180000 } },
-      notes: 'Gumawa ng Header Auth credential: Name = x-api-key, Value = ANTHROPIC API KEY mo.' },
+      notes: 'Create a Header Auth credential: Name = x-api-key, Value = your Anthropic API key.' },
     { id: 'parse', name: 'Validate Answer', type: 'n8n-nodes-base.code', typeVersion: 2, position: [1040, -80], parameters: { jsCode: PARSE_CODE } },
     { id: 'respond', name: 'Respond', type: 'n8n-nodes-base.respondToWebhook', typeVersion: 1.1, position: [1300, 0],
       parameters: { respondWith: 'json', responseBody: '={{ $json }}', options: { responseCode: '={{ $json.error ? 422 : 200 }}', responseHeaders: { entries: [{ name: 'Access-Control-Allow-Origin', value: '*' }] } } } },

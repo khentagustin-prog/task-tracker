@@ -44,7 +44,7 @@ export default function DuplicateModal({ kind, source, items, existing, onConfir
 
         <label className="m-label">New {kind} name</label>
         <input className="m-input" autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={40} />
-        {dup && <div className="m-err">May {kind} na may ganyang pangalan.</div>}
+        {dup && <div className="m-err">A {kind} with that name already exists.</div>}
 
         <label className="m-label">Shift dates by</label>
         <div className="dup-shift">
@@ -60,7 +60,7 @@ export default function DuplicateModal({ kind, source, items, existing, onConfir
           <label><input type="checkbox" checked={subs} onChange={(e) => setSubs(e.target.checked)} /> Copy subitems</label>
           <label><input type="checkbox" checked={notes} onChange={(e) => setNotes(e.target.checked)} /> Copy notes</label>
         </div>
-        <p className="muted" style={{ fontSize: 12, margin: '10px 0 0' }}>Hindi kasama ang mga na-upload na file.</p>
+        <p className="muted" style={{ fontSize: 12, margin: '10px 0 0' }}>Uploaded files are not copied.</p>
 
         <div className="m-foot">
           <button type="button" className="ghost" onClick={onClose} disabled={busy}>Cancel</button>

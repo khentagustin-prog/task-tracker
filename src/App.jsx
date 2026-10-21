@@ -9,6 +9,7 @@ import AuthGate from './AuthGate.jsx'
 import { emailToUsername } from './supabase.js'
 import Automation from './Automation.jsx'
 import PageLoading from './PageLoading.jsx'
+const LOAD_PHRASES = ['Loading your tracker...', 'Fetching your tasks...', 'Almost there...']
 import Archive from './Archive.jsx'
 import Dashboard from './Dashboard.jsx'
 import Settings from './Settings.jsx'
@@ -336,7 +337,7 @@ function Main({ user, signOut }) {
 
         {error && <div className="error">⚠ {error}</div>}
 
-        {loading ? <PageLoading /> : view === 'table' ? (
+        {loading ? <PageLoading phrases={LOAD_PHRASES} /> : view === 'table' ? (
           (board === 'all' && !visible.length) ? <div className="empty">No tasks yet. Use “+ Add task” in the table.</div> :
           <>{Object.entries(groups).map(([g, items], i) => {
             const c = gColor(g)

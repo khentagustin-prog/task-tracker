@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import PageLoading from './PageLoading.jsx'
 import { supabase, configured, usernameToEmail, passwordFor } from './supabase.js'
 
+const SIGN_IN_PHRASES = ['Signing in...', 'Verifying your account...', 'Checking your access...', 'Loading your tracker...', 'Almost there...']
 const CACHE_KEYS = ['statuses-v1', 'boards-v1', 'board-colors-v1', 'board-v1', 'view-v2']
 const clearCaches = () => { try { CACHE_KEYS.forEach((k) => localStorage.removeItem(k)) } catch { /* ignore */ } }
 
@@ -37,6 +38,7 @@ function LoginForm() {
 
   return (
     <Card>
+      {busy && <PageLoading overlay phrases={SIGN_IN_PHRASES} />}
       <p>Sign in to open your tracker.</p>
       <form className="login-form" onSubmit={submit}>
         <input autoFocus placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoCapitalize="none" spellCheck="false" />

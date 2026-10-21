@@ -779,4 +779,4 @@ main:has(> .auto) { margin: 0 auto; width: 100% }
 .page-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; min-height: 100vh; font-size: 15px; font-weight: 500 }
 main .page-loading { min-height: 60vh }
 
-.busy-spark { position: fixed; top: 14px; right: 18px; z-index: 50; pointer-events: none; opacity: 0; transition: opacity .25s; display: flex; padding: 8px; border-radius: 50%; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 2px 8px rgba(0,0,0,.15) } .busy-spark.on { opacity: 1 }
+.busy-spark { position: fixed; top: 14px; right: 18px; z-index: 50; pointer-events: none; opacity: 0; transition: opacity .25s; display: flex; padding: 8px; border-radius: 50%; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 2px 8px rgba(0,0,0,.15) } .busy-spark.on { opacity: 1 }.page-loading.overlay { position: fixed; inset: 0; z-index: 100; min-height: 0; background: var(--bg, #17171a) }

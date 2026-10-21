@@ -142,7 +142,6 @@ aside button.newb { color: var(--blue); font-weight: 520 }
 .task-modal h4 { margin: 18px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted) }
 .files .fn { flex: 1; word-break: break-all }
 
-aside button.settings-btn { margin-top: auto } aside .mode { margin-top: 0 }
 .settings { max-width: 760px }
 .s-card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 22px; margin-top: 20px }
 .s-card h2 { margin: 0 0 4px; font-size: 17px } .s-card h2 small { color: var(--muted); font-weight: 400 }
@@ -168,7 +167,6 @@ aside button.settings-btn { margin-top: auto } aside .mode { margin-top: 0 }
 :root[data-theme=dark] .m-sug button:hover { background: var(--hover) }
 :root[data-theme=dark] .tag, :root[data-theme=dark] .modal-wrap { color-scheme: dark }
 :root[data-theme=dark] input, :root[data-theme=dark] select, :root[data-theme=dark] textarea { color: var(--text) }
-.settings-btn.theme { margin-top: auto } aside button.settings-btn:not(.theme) { margin-top: 0 }
 /* compact Monday-style table */
 .table { border-left-width: 0; border-radius: 0; border: 1px solid var(--line); box-shadow: none }
 .trow { border-bottom: 1px solid var(--line) } .trow:last-child { border-bottom: 0 }
@@ -758,10 +756,6 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 /* Google sign-in + signed-in user */
 .g-btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 10px; padding: 10px 16px; font: inherit; font-weight: 500; cursor: pointer; margin: 6px 0 }
 .g-btn:hover { background: var(--hover) } .g-btn:disabled { opacity: .6; cursor: wait }
-.who { margin-top: auto; padding: 8px 8px 4px; font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 4px }
-.who span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #12b76a }
-.who button { all: unset; cursor: pointer; font-size: 12px; color: var(--muted); text-decoration: underline } .who button:hover { color: var(--text) }
-aside button.settings-btn.theme { margin-top: auto } aside .who { margin-top: 0 }
 
 .login-form { display: flex; flex-direction: column; gap: 10px; text-align: left }
 .login-form > input { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface2); color: var(--text); font: inherit; outline: none }
@@ -780,3 +774,44 @@ main:has(> .auto) { margin: 0 auto; width: 100% }
 main .page-loading { min-height: 60vh }
 
 .busy-spark { position: fixed; top: 14px; right: 18px; z-index: 50; pointer-events: none; opacity: 0; transition: opacity .25s; display: flex; padding: 8px; border-radius: 50%; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 2px 8px rgba(0,0,0,.15) } .busy-spark.on { opacity: 1 }.page-loading.overlay { position: fixed; inset: 0; z-index: 100; min-height: 0; background: var(--bg, #17171a) }
+
+
+/* sidebar footer */
+.side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 2px; padding-top: 10px; border-top: 1px solid var(--line) }
+aside button.foot-btn { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; font-size: 13px; color: var(--muted) }
+aside button.foot-btn:hover { background: var(--hover); color: var(--text) }
+aside button.foot-btn.on { background: color-mix(in srgb, var(--blue) 16%, transparent); color: var(--blue); font-weight: 520 }
+.foot-btn svg, .signout svg, .share-btn svg, .share-chip svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none }
+.user-card { display: flex; align-items: center; gap: 10px; margin-top: 8px; padding: 8px; border-radius: 10px; background: var(--surface2); border: 1px solid var(--line) }
+.avatar { position: relative; width: 30px; height: 30px; border-radius: 50%; background: var(--blue); color: #fff; display: grid; place-items: center; font-size: 13px; font-weight: 600; flex: none }
+.avatar i { position: absolute; right: -1px; bottom: -1px; width: 9px; height: 9px; border-radius: 50%; background: #12b76a; border: 2px solid var(--surface2) }
+.avatar.sm { width: 26px; height: 26px; font-size: 12px; background: #7a5af8 } .avatar.me { background: var(--blue) }
+.uname { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.25 }
+.uname b { font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap } .uname small { font-size: 11px; color: #12b76a }
+aside button.signout { all: unset; box-sizing: border-box; cursor: pointer; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; color: var(--muted) }
+aside button.signout:hover { background: var(--hover); color: #f04438 }
+/* boards: row with a 3-dot menu */
+.brow { position: relative; display: flex; align-items: center; border-radius: 8px } .brow:hover { background: var(--hover) } .brow.on { background: color-mix(in srgb, var(--blue) 16%, transparent) }
+aside .brow button.bmain { flex: 1; min-width: 0; background: none !important }
+.brow.on button.bmain { color: var(--blue); font-weight: 520 }
+.bname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0 }
+.bshared { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; opacity: .55; flex: none } .bowner { font-size: 10.5px; color: #12b76a; background: #12b76a1a; border-radius: 99px; padding: 1px 7px; margin-left: 2px }
+aside .brow button.bdots { all: unset; cursor: pointer; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; color: var(--muted); font-size: 16px; line-height: 1; opacity: 0; margin-right: 2px; flex: none }
+.brow:hover .bdots, .brow .bdots:focus-visible { opacity: 1 } aside .brow button.bdots:hover { background: var(--line); color: var(--text) }
+@media (hover: none) { aside .brow button.bdots { opacity: .7 } }
+.side-label.sub { padding-top: 12px }
+.bmenu { position: fixed; z-index: 60; min-width: 150px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 4px; box-shadow: 0 10px 30px #10182830; animation: pop .12s }
+.bmenu button { all: unset; box-sizing: border-box; display: block; width: 100%; cursor: pointer; padding: 8px 12px; border-radius: 7px; font-size: 13px; color: var(--text) } .bmenu button:hover { background: var(--hover) }
+/* board header share */
+.share-btn, .share-chip { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 99px; padding: 7px 14px; font: inherit; font-size: 13px; cursor: pointer }
+.share-btn:hover { border-color: var(--blue); color: var(--blue) } .share-btn b { background: var(--blue); color: #fff; border-radius: 99px; font-size: 11px; padding: 1px 7px; font-weight: 600 }
+.share-chip { cursor: default; color: #12b76a; border-color: #12b76a55; background: #12b76a14 }
+/* share dialog */
+.share-modal { width: min(460px, 100%) } .share-modal h3 { margin: 0 0 4px } .s-note { margin: 0 0 14px; font-size: 12.5px; line-height: 1.5 }
+.s-list { display: flex; flex-direction: column; gap: 2px; margin: 10px 0; max-height: 190px; overflow-y: auto }
+.s-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px } .s-row:hover { background: var(--hover) }
+.s-name { flex: 1; font-size: 14px } .s-name small { color: var(--muted); font-size: 11.5px; margin-left: 4px }
+.s-btn { padding: 5px 12px !important; font-size: 12.5px !important }
+.s-empty { color: var(--muted); font-size: 12.5px; padding: 8px }
+.s-head { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-top: 14px }
+.top .share-btn, .top .share-chip { margin-left: auto }

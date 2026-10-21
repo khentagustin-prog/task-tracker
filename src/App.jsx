@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { api } from './api.js'
+import { api, boardKey, setForeign } from './api.js'
 import BoardModal, { BOARD_COLORS } from './BoardModal.jsx'
 import TaskModal from './TaskModal.jsx'
 import ConfirmModal from './ConfirmModal.jsx'
@@ -9,6 +9,7 @@ import AuthGate from './AuthGate.jsx'
 import { emailToUsername } from './supabase.js'
 import Automation from './Automation.jsx'
 import PageLoading from './PageLoading.jsx'
+import ShareModal from './ShareModal.jsx'
 const LOAD_PHRASES = ['Loading your tracker...', 'Fetching your tasks...', 'Almost there...']
 import Archive from './Archive.jsx'
 import Dashboard from './Dashboard.jsx'
@@ -81,6 +82,13 @@ function Main({ user, signOut }) {
   const [addGroup, setAddGroup] = useState(null)
   const [addSection, setAddSection] = useState(null)
   const [sections, setSections] = useState({})
+  const [shared, setShared] = useState([]) // boards other people shared with me
+  const [shareFor, setShareFor] = useState(null) // board whose Share dialog is open
+  const [boardMenu, setBoardMenu] = useState(null)
+  const [sharedWith, setSharedWith] = useState({}) // my board -> usernames it is shared with
+  const [people, setPeople] = useState(null) // null = sharing is not set up yet
+  const sharedInfo = useMemo(() => Object.fromEntries(shared.map((x) => [boardKey(x.board, x.owner_name), x])), [shared])
+  const isMine = (t) => !t.owner || t.owner === user.id
   const [focusGroup, setFocusGroup] = useState(null)
   const [delSec, setDelSec] = useState(null)
   const [secBusy, setSecBusy] = useState(false)
@@ -98,7 +106,7 @@ function Main({ user, signOut }) {
     setPop((p) => ({ id, sid, x: r.right, y: r.bottom + 6, pinned: !!pin || (p?.id === id && p.sid === sid && p.pinned) }))
   }
   const leavePop = () => { clearTimeout(popTimer.current); popTimer.current = setTimeout(() => setPop((p) => (p && p.pinned ? p : null)), 220) }
-  useEffect(() => { const c = () => { setPop(null); setSubMenu(null) }; window.addEventListener('click', c); return () => window.removeEventListener('click', c) }, [])
+  useEffect(() => { const c = () => { setPop(null); setSubMenu(null); setBoardMenu(null) }; window.addEventListener('click', c); return () => window.removeEventListener('click', c) }, [])
   const [confirmBulk, setConfirmBulk] = useState(false)
   const [bulkBusy, setBulkBusy] = useState(false)
   const [ownerEdit, setOwnerEdit] = useState(null)
@@ -109,7 +117,7 @@ function Main({ user, signOut }) {
   const [showBoard, setShowBoard] = useState(false)
   const [colors, setColors] = useState(() => { try { return JSON.parse(localStorage.getItem('board-colors-v1')) || {} } catch { return {} } })
   useEffect(() => { try { localStorage.setItem('board-colors-v1', JSON.stringify(colors)) } catch {} }, [colors])
-  const colorOf = (g, i = 0) => colors[g] || BOARD_COLORS[i % BOARD_COLORS.length]
+  const colorOf = (g, i = 0) => colors[g] || sharedInfo[g]?.color || BOARD_COLORS[i % BOARD_COLORS.length]
   const createBoard = (name, color) => {
     setExtra((e) => (e.includes(name) ? e : [...e, name])); setColors((c) => ({ ...c, [name]: color }))
     setBoard(name); setGroup(name); setShowBoard(false)
@@ -150,7 +158,28 @@ function Main({ user, signOut }) {
   const queue = useRef(Promise.resolve())
   const pending = useRef(0)
   const setT = (next) => { tasksRef.current = next; setTasks(next) }
-  const refresh = () => api.list().then((list) => { if (pending.current === 0) setT(list) }).catch((e) => setError(e.message)).finally(() => setLoading(false))
+  // sharing problems never block your own tasks (the .catch fallbacks)
+  const refresh = () => Promise.all([api.sharedBoards().catch(() => []), api.list(), api.myShares().catch(() => [])]).then(([sb, list, mine]) => {
+    const names = Object.fromEntries(sb.map((x) => [x.owner, x.owner_name]))
+    setForeign(Object.fromEntries(sb.map((x) => [boardKey(x.board, x.owner_name), { owner: x.owner, board: x.board }])))
+    setShared(sb)
+    const by = {}
+    ;(mine || []).forEach((m) => { (by[m.board] ||= []).push(m.shared_with) })
+    setSharedWith(by)
+    if (pending.current === 0) setT(list.map((t) => (isMine(t) ? t : { ...t, group_name: boardKey(t.group_name || 'Main', names[t.owner] || t.owner.slice(0, 6)) })))
+  }).catch((e) => setError(e.message)).finally(() => setLoading(false))
+  useEffect(() => { api.people().then(setPeople).catch(() => setPeople(null)) }, [])
+  // pick up changes other people made (not while somebody is typing)
+  useEffect(() => {
+    const tick = () => {
+      const a = document.activeElement
+      if (document.hidden || pending.current > 0 || (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) return
+      refresh()
+    }
+    const id = setInterval(tick, 20000)
+    window.addEventListener('focus', tick)
+    return () => { clearInterval(id); window.removeEventListener('focus', tick) }
+  }, [])
   useEffect(() => { refresh() }, [])
 
   const run = async (fn) => { try { setError(''); await fn(); await refresh() } catch (e) { setError(e.message) } }
@@ -176,7 +205,10 @@ function Main({ user, signOut }) {
     askDuplicateBoard: (g) => setDup({ kind: 'board', name: g }),
     recolorBoard: (g, c) => setColors((x) => ({ ...x, [g]: c })),
     renameBoard: async (old, name) => {
-      await run(() => Promise.all(allTasks.filter((t) => (t.group_name || 'Main') === old).map((t) => api.update(t.id, { group_name: name }))))
+      await run(async () => {
+        await api.renameShares(old, name) // keeps people the board is shared with
+        await Promise.all(allTasks.filter((t) => (t.group_name || 'Main') === old).map((t) => api.update(t.id, { group_name: name })))
+      })
       setExtra((e) => [...e.filter((x) => x !== old), name])
       setSections((x) => { const { [old]: v, ...rest } = x; return v ? { ...rest, [name]: v } : rest })
       setColors((c) => { const { [old]: col, ...rest } = c; return col ? { ...rest, [name]: col } : rest })
@@ -187,6 +219,7 @@ function Main({ user, signOut }) {
       await run(async () => {
         await Promise.all(mine.flatMap((t) => allFiles(t).map((f) => deleteFile(f.path).catch(() => {}))))
         await Promise.all(mine.map((t) => api.remove(t.id)))
+        await api.deleteShares(name)
       })
       setExtra((e) => e.filter((x) => x !== name))
       setSections((x) => { const { [name]: _, ...rest } = x; return rest })
@@ -244,16 +277,22 @@ function Main({ user, signOut }) {
   const visible = useMemo(() => tasks.filter((t) =>
     (board === 'all' || (t.group_name || 'Main') === board) && (filter === 'all' || t.status === filter) && t.title.toLowerCase().includes(q.toLowerCase())).sort(sorter), [tasks, q, filter, sort, board])
 
+  const sectionsAll = useMemo(() => ({ ...Object.fromEntries(shared.filter((x) => x.sections?.length).map((x) => [boardKey(x.board, x.owner_name), x.sections])), ...sections }), [shared, sections])
   const groups = useMemo(() => {
     const m = {}
     if (board === 'all') { visible.forEach((t) => (m[t.group_name || 'Main'] ||= []).push(t)); return m }
-    ;(sections[board] || []).forEach((x) => { m[x.name] = [] })
+    ;(sectionsAll[board] || []).forEach((x) => { m[x.name] = [] })
     visible.forEach((t) => (m[t.section || board] ||= []).push(t))
-    if (!(sections[board] || []).length && !(board in m)) m[board] = []
+    if (!(sectionsAll[board] || []).length && !(board in m)) m[board] = []
     return m
-  }, [visible, board, sections])
-  const allGroups = [...new Set(['Main', ...extra, ...tasks.map((t) => t.group_name || 'Main')])]
-  const gColor = (g) => (board === 'all' ? colorOf(g, allGroups.indexOf(g)) : ((sections[board] || []).find((x) => x.name === g)?.color || colorOf(board)))
+  }, [visible, board, sectionsAll])
+  const ownGroups = [...new Set(['Main', ...extra, ...tasks.filter(isMine).map((t) => t.group_name || 'Main')])]
+  const sharedGroups = Object.keys(sharedInfo).filter((k) => !ownGroups.includes(k))
+  const allGroups = [...ownGroups, ...sharedGroups]
+  // Tasks can only move between boards of the same owner.
+  const spaceOf = (b) => sharedInfo[b]?.owner || 'me'
+  const boardsLike = (ref) => allGroups.filter((b) => spaceOf(b) === spaceOf(ref))
+  const gColor = (g) => (board === 'all' ? colorOf(g, allGroups.indexOf(g)) : ((sectionsAll[board] || []).find((x) => x.name === g)?.color || colorOf(board)))
   const saveSections = (list) => setSections((x) => ({ ...x, [board]: list }))
   const currentList = (over = {}) => Object.keys(groups).map((n) => ({ name: over.rename?.[0] === n ? over.rename[1] : n, color: over.color?.[0] === n ? over.color[1] : gColor(n) }))
   const addSectionGroup = () => {
@@ -296,17 +335,46 @@ function Main({ user, signOut }) {
         <div className="side-label">Boards</div>
         <nav>
           <button className={board === 'all' ? 'on' : ''} onClick={() => pickBoard('all')}>◎ All tasks<em>{tasks.length}</em></button>
-          {allGroups.map((g, i) => (
-            <button key={g} className={board === g ? 'on' : ''} onClick={() => pickBoard(g)}>
-              <i style={{ background: colorOf(g, i) }} /> {g}
-              <em>{tasks.filter((t) => (t.group_name || 'Main') === g).length}</em>
-            </button>
+          {ownGroups.map((g, i) => (
+            <div key={g} className={`brow ${board === g ? 'on' : ''}`}>
+              <button className="bmain" onClick={() => pickBoard(g)}>
+                <i style={{ background: colorOf(g, i) }} /> <span className="bname">{g}</span>
+                {!!sharedWith[g]?.length && <svg className="bshared" viewBox="0 0 24 24" aria-label="Shared"><circle cx="9" cy="8" r="3.2" /><path d="M3 20a6 6 0 0 1 12 0M16 4.5a3.2 3.2 0 0 1 0 6M18 14.2A6 6 0 0 1 21 20" /></svg>}
+                <em>{tasks.filter((t) => (t.group_name || 'Main') === g).length}</em>
+              </button>
+              <button className="bdots" title="Board options" onClick={(e) => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); setBoardMenu({ board: g, x: r.right + 6, y: r.top }) }}>⋯</button>
+            </div>
+          ))}
+          {!!sharedGroups.length && <div className="side-label sub">Shared with me</div>}
+          {sharedGroups.map((g, i) => (
+            <div key={g} className={`brow ${board === g ? 'on' : ''}`}>
+              <button className="bmain" onClick={() => pickBoard(g)}>
+                <i style={{ background: colorOf(g, i + ownGroups.length) }} /> <span className="bname">{sharedInfo[g].board}</span>
+                <span className="bowner">{sharedInfo[g].owner_name}</span>
+                <em>{tasks.filter((t) => t.group_name === g).length}</em>
+              </button>
+              <button className="bdots" title="Board options" onClick={(e) => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); setBoardMenu({ board: g, x: r.right + 6, y: r.top }) }}>⋯</button>
+            </div>
           ))}
           <button className="newb" onClick={() => setShowBoard(true)}>+ New board</button>
         </nav>
-        <button className="settings-btn theme" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☀ Light mode' : '☾ Dark mode'}</button>
-        <button className={`settings-btn ${view === 'settings' ? 'on' : ''}`} onClick={() => setView('settings')}>⚙ Settings</button>
-        <div className="who" title={user.email}><span>● {emailToUsername(user.email)}</span><button onClick={signOut}>Sign out</button></div>
+        <div className="side-foot">
+          <button className="foot-btn" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+            <svg viewBox="0 0 24 24">{theme === 'dark' ? <><circle cx="12" cy="12" r="4" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4" /></> : <path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z" />}</svg>
+            {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+          </button>
+          <button className={`foot-btn ${view === 'settings' ? 'on' : ''}`} onClick={() => setView('settings')}>
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg>
+            Settings
+          </button>
+          <div className="user-card" title={user.email}>
+            <span className="avatar">{emailToUsername(user.email).slice(0, 1).toUpperCase()}<i /></span>
+            <span className="uname"><b>{emailToUsername(user.email)}</b><small>Signed in</small></span>
+            <button className="signout" title="Sign out" aria-label="Sign out" onClick={signOut}>
+              <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" /></svg>
+            </button>
+          </div>
+        </div>
       </aside>
 
       <main>
@@ -323,9 +391,12 @@ function Main({ user, signOut }) {
         ) : (<>
         <div className="top">
           <div>
-            <h1>{board === 'all' ? 'All Tasks' : board}</h1>
+            <h1>{board === 'all' ? 'All Tasks' : (sharedInfo[board]?.board || board)}</h1>
             <p className="muted">{done} of {inBoard.length} done · {overdue} overdue · {pct}% complete</p>
           </div>
+          {board !== 'all' && (sharedInfo[board]
+            ? <span className="share-chip" title="You can add, edit and delete tasks here"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2" /><path d="M3 20a6 6 0 0 1 12 0M16 4.5a3.2 3.2 0 0 1 0 6M18 14.2A6 6 0 0 1 21 20" /></svg>Shared by {sharedInfo[board].owner_name}</span>
+            : <button className="share-btn" onClick={() => setShareFor(board)}><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2" /><path d="M3 20a6 6 0 0 1 12 0M16 4.5a3.2 3.2 0 0 1 0 6M18 14.2A6 6 0 0 1 21 20" /></svg>Share{!!sharedWith[board]?.length && <b>{sharedWith[board].length}</b>}</button>)}
         </div>
 
         <div className="toolbar" style={{ justifyContent: 'flex-end' }}>
@@ -346,10 +417,10 @@ function Main({ user, signOut }) {
               <section key={g} className="group">
                 <h2 style={{ color: c }}>
                   <span className={`caret ${open ? 'is-open' : ''}`} onClick={() => setCollapsed({ ...collapsed, [g]: open })}>⌄</span>
-                  {board === 'all' ? <span onClick={() => setCollapsed({ ...collapsed, [g]: open })}>{g}</span> : (<>
-                    <input className="gname" key={g} defaultValue={g} style={{ color: c }} autoFocus={focusGroup === g}
+                  {board === 'all' ? <span onClick={() => setCollapsed({ ...collapsed, [g]: open })}>{sharedInfo[g]?.board || g}</span> : (<>
+                    <input className="gname" key={g} defaultValue={sharedInfo[g]?.board || g} style={{ color: c }} autoFocus={focusGroup === g}
                       onFocus={(e) => { if (focusGroup === g) { e.target.select(); setFocusGroup(null) } }}
-                      onBlur={(e) => renameSection(g, e.target.value)} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
+                      onBlur={(e) => { if (e.target.value !== (sharedInfo[g]?.board || g)) renameSection(g, e.target.value) }} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
                     <input type="color" className="gcolor" value={c} title="Group color" onChange={(e) => saveSections(currentList({ color: [g, e.target.value] }))} />
                   </>)}
                   <small>{items.length} {items.length === 1 ? 'Task' : 'Tasks'} / {items.reduce((n, t) => n + subs(t).length, 0)} Subitems</small>
@@ -500,7 +571,7 @@ function Main({ user, signOut }) {
               <button onClick={() => setConfirmBulk(true)}><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" /></svg>Delete</button>
               <div className="sel-move">
                 <button onClick={() => setMoveOpen(!moveOpen)}><svg viewBox="0 0 24 24"><path d="M4 12h16M14 6l6 6-6 6" /></svg>Move to</button>
-                {moveOpen && <div className="move-menu">{allGroups.map((b) => <button key={b} onClick={() => moveTo(b)}><i style={{ background: colorOf(b, allGroups.indexOf(b)) }} />{b}</button>)}</div>}
+                {moveOpen && <div className="move-menu">{boardsLike(chosen[0]?.group_name || 'Main').map((b) => <button key={b} onClick={() => moveTo(b)}><i style={{ background: colorOf(b, allGroups.indexOf(b)) }} />{sharedInfo[b]?.board || b}</button>)}</div>}
               </div>
             </div>
             <button className="sel-x" title="Clear selection" onClick={() => { setSel({}); setMoveOpen(false) }}>✕</button>
@@ -570,9 +641,22 @@ function Main({ user, signOut }) {
       })()}
       {showAdd && <TaskModal statuses={STATUSES} priorities={PRIORITIES} groups={allGroups}
         initial={{ status, group_name: addGroup || (board === 'all' ? 'Main' : board) }} onCreate={createTask} onClose={() => { setShowAdd(false); setAddGroup(null); setAddSection(null) }} />}
+      {boardMenu && (
+        <div className="bmenu" style={{ left: boardMenu.x, top: boardMenu.y }} onClick={(e) => e.stopPropagation()}>
+          {sharedInfo[boardMenu.board] ? (
+            <button onClick={async () => { const x = sharedInfo[boardMenu.board]; setBoardMenu(null); if (board === boardMenu.board) pickBoard('all'); await run(() => api.leaveBoard(x.owner, x.board)) }}>Leave this board</button>
+          ) : (<>
+            <button onClick={() => { setShareFor(boardMenu.board); setBoardMenu(null) }}>Share…</button>
+            <button onClick={() => { pickBoard(boardMenu.board); setBoardMenu(null) }}>Open</button>
+          </>)}
+        </div>
+      )}
+      {shareFor && <ShareModal board={shareFor} people={people} sharedIds={sharedWith[shareFor] || []} onClose={() => setShareFor(null)}
+        onAdd={async (p) => { await api.addShare(shareFor, p.id); await refresh() }}
+        onRemove={async (p) => { await api.removeShare(shareFor, p.id); await refresh() }} />}
       {showBoard && <BoardModal existing={allGroups} onCreate={createBoard} onClose={() => setShowBoard(false)} />}
       {allTasks.find((t) => t.id === openId) && (
-        <Drawer task={allTasks.find((t) => t.id === openId)} statuses={STATUSES} priorities={PRIORITIES} groups={allGroups}
+        <Drawer task={allTasks.find((t) => t.id === openId)} statuses={STATUSES} priorities={PRIORITIES} groups={boardsLike(allTasks.find((t) => t.id === openId)?.group_name || 'Main')} boardLabel={(b) => sharedInfo[b]?.board || b}
           onPatch={patch} onPreview={setPreview} onClose={() => setOpenId(null)} onDelete={(id) => { setOpenId(null); run(() => api.remove(id)) }} />
       )}
     </div>

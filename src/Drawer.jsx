@@ -13,7 +13,7 @@ const ago = (iso) => {
 }
 const fmt = (n) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`)
 
-export default function Drawer({ task, statuses, priorities, groups, onPatch, onPreview, onClose, onDelete }) {
+export default function Drawer({ task, statuses, priorities, groups, boardLabel = (b) => b, onPatch, onPreview, onClose, onDelete }) {
   const [tab, setTab] = useState('updates')
   const [draft, setDraft] = useState('')
   const [delUpd, setDelUpd] = useState(null)
@@ -151,7 +151,7 @@ export default function Drawer({ task, statuses, priorities, groups, onPatch, on
             <input type="date" value={task.due_date || ''} onChange={(e) => onPatch(task.id, { due_date: e.target.value || null })} /></label>
           <label>Board
             <select value={task.group_name || 'Main'} onChange={(e) => onPatch(task.id, { group_name: e.target.value })}>
-              {groups.map((g) => <option key={g}>{g}</option>)}</select></label>
+              {groups.map((g) => <option key={g} value={g}>{boardLabel(g)}</option>)}</select></label>
         </div>
 
         <h4>Tags</h4>

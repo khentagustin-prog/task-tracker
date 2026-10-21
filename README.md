@@ -29,6 +29,14 @@ It runs in one transaction (all or nothing): it creates the accounts, makes data
 `admin1`, and removes the old open access. The old n8n workflows "Task Tracker API" and "Task Tracker - Extract (image to rows)"
 are switched off.
 
+#### Sharing boards between accounts
+Run `supabase-v9-sharing.sql` once in the Supabase SQL Editor (it is safe to run again). Then every board has a 3-dot menu in the sidebar (and a Share button in the board header):
+- **Share…** lets you search the other accounts and give them access. They can add, edit and delete tasks in that board and open its files. They see nothing else of yours.
+- Boards shared with you appear under **Shared with me** with the owner's name. A task added there belongs to the board's owner. The 3-dot menu has **Leave this board**.
+- Renaming a board keeps its shares; deleting a board removes them. Tasks can only move between boards of the same owner.
+- Changes from other people show up within about 20 seconds (or when you return to the tab).
+Until the script is run, the app works as before and the Share dialog says sharing is not set up.
+
 ### 3. n8n (only needed for reading images with AI)
 1. Build the workflow (credentials stay out of git):
    `SUPABASE_URL=https://<project>.supabase.co SUPABASE_ANON_KEY=<publishable key> LLM_CRED_ID=<Header Auth credential with your Groq key> node n8n/build-extract-workflow.mjs n8n/extract-out.json`

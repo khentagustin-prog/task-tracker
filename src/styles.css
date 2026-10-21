@@ -769,3 +769,4 @@ aside button.settings-btn.theme { margin-top: auto } aside .who { margin-top: 0 
 .login-form > input { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface2); color: var(--text); font: inherit; outline: none }
 .login-form > input:focus { border-color: var(--blue) }
 .login-form .primary { padding: 10px; margin-top: 2px } .login-form .primary:disabled { opacity: .5; cursor: not-allowed }
+main:has(> .auto) { margin: 0 auto; width: 100% }

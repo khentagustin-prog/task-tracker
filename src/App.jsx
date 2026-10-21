@@ -8,6 +8,7 @@ import { shiftDate } from './dates.js'
 import AuthGate from './AuthGate.jsx'
 import { emailToUsername } from './supabase.js'
 import Automation from './Automation.jsx'
+import Thinking from './Thinking.jsx'
 import Archive from './Archive.jsx'
 import Dashboard from './Dashboard.jsx'
 import Settings from './Settings.jsx'
@@ -335,7 +336,7 @@ function Main({ user, signOut }) {
 
         {error && <div className="error">⚠ {error}</div>}
 
-        {loading ? <div className="empty">Loading...</div> : view === 'table' ? (
+        {loading ? <div className="empty"><Thinking text="Loading your tasks..." /></div> : view === 'table' ? (
           (board === 'all' && !visible.length) ? <div className="empty">No tasks yet. Use “+ Add task” in the table.</div> :
           <>{Object.entries(groups).map(([g, items], i) => {
             const c = gColor(g)

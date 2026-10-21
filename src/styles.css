@@ -770,3 +770,11 @@ aside button.settings-btn.theme { margin-top: auto } aside .who { margin-top: 0 
 .login-form > input:focus { border-color: var(--blue) }
 .login-form .primary { padding: 10px; margin-top: 2px } .login-form .primary:disabled { opacity: .5; cursor: not-allowed }
 main:has(> .auto) { margin: 0 auto; width: 100% }
+.thinking { display: inline-flex; align-items: center; gap: 9px; font-size: 13.5px; color: var(--muted) }
+.spark { color: #d97757; animation: spark-spin 2.4s linear infinite, spark-pulse 1.2s ease-in-out infinite; flex: none }
+@keyframes spark-spin { to { transform: rotate(360deg) } }
+@keyframes spark-pulse { 50% { opacity: .55; scale: .82 } }
+.shimmer { background: linear-gradient(90deg, var(--muted) 0%, var(--muted) 35%, var(--text) 50%, var(--muted) 65%, var(--muted) 100%); background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 2s linear infinite }
+@keyframes shimmer { from { background-position: 100% 0 } to { background-position: -100% 0 } }
+.empty .thinking { justify-content: center }
+@media (prefers-reduced-motion: reduce) { .spark, .shimmer { animation: none } .shimmer { color: var(--muted); background: none } }

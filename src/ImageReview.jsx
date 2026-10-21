@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import Thinking from './Thinking.jsx'
 import { extractRows } from './extract.js'
 import { guessFlow, withGaps, validateReview, summaryOf, formatGapPdf, compareReads, MIN } from './sequence.js'
 import { buildSequencePdf } from './seqPdf.js'
@@ -131,7 +132,7 @@ export default function ImageReview({ casinos = [] }) {
               <label className="au-year">Year of the dates<input type="number" value={year} onChange={(e) => setYear(e.target.value)} /></label>
               <small className="muted">The image has no year, so enter the correct one.</small>
               <label className="au-verify"><input type="checkbox" checked={verify} onChange={(e) => setVerify(e.target.checked)} /> Read twice to be sure <small>(the second read runs after 1 minute; any mismatch is flagged)</small></label>
-              {busy && <div className="muted">The AI is reading the image...</div>}
+              {busy && <Thinking phrases={['Reading the image...', 'Finding the rows...', 'Checking dates and times...', 'Computing the gaps...']} />}
               {!busy && (steps || err) && <button className="ghost" onClick={() => read()}>Read again</button>}
             </div>
           )}
@@ -166,8 +167,8 @@ export default function ImageReview({ casinos = [] }) {
           <section className="d-card">
             <h3>Review the result <small>{steps.length} steps · {nAct} Activation · {nRem} Reminder</small></h3>
             {calc.errors.map((m, i) => <div key={i} className="au-bad">⛔ {m}</div>)}
-            {vstate && vstate.phase === 'wait' && <div className="rv-verify">⏳ Second read in <b>{vstate.left}s</b> (for comparison). You can start reviewing now; downloads unlock when it finishes. <button className="link" onClick={skipVerify}>Skip</button></div>}
-            {vstate && vstate.phase === 'read' && <div className="rv-verify">⏳ Reading the image a second time... <button className="link" onClick={skipVerify}>Skip</button></div>}
+            {vstate && vstate.phase === 'wait' && <div className="rv-verify"><Thinking text="" />Second read in <b>{vstate.left}s</b> (for comparison). You can start reviewing now; downloads unlock when it finishes. <button className="link" onClick={skipVerify}>Skip</button></div>}
+            {vstate && vstate.phase === 'read' && <div className="rv-verify"><Thinking text="Reading the image a second time..." /> <button className="link" onClick={skipVerify}>Skip</button></div>}
             {vstate && vstate.phase === 'done' && !vstate.diffs && !vstate.warnings.length && <div className="au-ok">✓ The two independent AI reads match.</div>}
             {vstate && vstate.phase === 'done' && vstate.diffs > 0 && <div className="au-warn">⚠ {vstate.diffs} row(s) differ between the two reads. They are highlighted; check them against the image.</div>}
             {vstate && vstate.phase === 'done' && vstate.warnings.map((m, i) => <div key={'vw' + i} className="au-warn">⚠ {m}</div>)}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import PageLoading from './PageLoading.jsx'
 import { supabase, configured, usernameToEmail, passwordFor } from './supabase.js'
 
 const CACHE_KEYS = ['statuses-v1', 'boards-v1', 'board-colors-v1', 'board-v1', 'view-v2']
@@ -65,7 +66,7 @@ export default function AuthGate({ children }) {
   const signOut = async () => { clearCaches(); await supabase.auth.signOut() }
 
   if (!configured) return <Card><p>Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_KEY, then reload.</p></Card>
-  if (state.loading) return <Card><p>Loading...</p></Card>
+  if (state.loading) return <PageLoading />
   if (!state.session) return <LoginForm />
   return children(state.session.user, signOut)
 }

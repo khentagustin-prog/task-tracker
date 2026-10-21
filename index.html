@@ -4,9 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Task Tracker</title>
+      <style>
+      html, body { margin: 0; background: #17171a }
+      @media (prefers-color-scheme: light) { html, body { background: #f6f7fb } }
+      .boot { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; font: 500 15px Inter, system-ui, sans-serif; color: #98a2b3 }
+      .boot svg { color: #d97757; animation: bs 2.4s linear infinite, bp 1.2s ease-in-out infinite }
+      @keyframes bs { to { transform: rotate(360deg) } } @keyframes bp { 50% { opacity: .55; scale: .82 } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div class="boot"><svg  viewBox="0 0 24 24" width="44" height="44" aria-hidden="true"><path d="M12 2v20M3.3 7l17.4 10M3.3 17L20.7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg><span>Loading</span></div></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
